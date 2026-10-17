@@ -25,8 +25,7 @@ are checked in as fixtures (CI never runs Julia).
 ## Dependencies
 
 symtn (and krylov-rs, once the eigensolver lands) are git dependencies pinned
-by revision; `Cargo.lock` is
-committed and CI builds with `--locked`.
+by revision; `Cargo.lock` is committed and CI builds with `--locked`.
 
 ## References
 
