@@ -1,0 +1,16 @@
+[workspace]
+members = ["golden-chain"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.96"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Ryo-wtnb11/symtn-apps"
+publish = false
+
+[workspace.dependencies]
+# Pinned by rev: an application must be reproducible against the exact
+# symtn it was validated with. Bump in a dedicated commit.
+symtn = { git = "https://github.com/Ryo-wtnb11/symtn-rs", rev = "2076575e9b55683b59093079e47624cd7c0608fb" }
+num-complex = "0.4"

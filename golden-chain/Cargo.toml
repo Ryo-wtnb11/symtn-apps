@@ -1,0 +1,13 @@
+[package]
+name = "golden-chain"
+version = "0.0.0"
+description = "Fibonacci golden-chain DMRG on symtn anyonic tensors"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+symtn.workspace = true
+num-complex.workspace = true
