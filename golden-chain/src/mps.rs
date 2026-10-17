@@ -159,8 +159,9 @@ pub fn amplitudes(psi: &Tensor) -> Result<Vec<(Vec<Fib>, num_complex::Complex64)
 
 /// Von Neumann entanglement entropy of a Schmidt spectrum given per sector,
 /// in MPSKit's convention (0.13.13 `src/algorithms/toolbox.jl:entropy`):
-/// `S = -Σ_s d_s Σ_k λ²_{s,k} ln λ²_{s,k}`, with values `λ < ε` dropped and
-/// the spectrum normalized as `Σ_s d_s Σ_k λ²_{s,k} = 1`.
+/// `S = -Σ_s d_s Σ_k λ²_{s,k} ln λ²_{s,k}`, with values `λ < ε` dropped.
+/// The caller must pass a normalized spectrum, `Σ_s d_s Σ_k λ²_{s,k} = 1`;
+/// like MPSKit, this function does not normalize.
 pub fn entropy<'a>(spectrum: impl IntoIterator<Item = (Fib, &'a [f64])>) -> f64 {
     -spectrum
         .into_iter()
