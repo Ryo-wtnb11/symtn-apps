@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use golden_chain::ed::{Boundary, Chain, Fib};
+use golden_chain::ed::{Boundary, Chain, Fib, phi};
 use golden_chain::model::{ONE, Space, Tensor, bond_term, physical, virtual_spaces};
 use golden_chain::mps::{
     Heff, amplitudes, contract_chain, left_isometry, left_operator, right_isometry, right_operator,
@@ -11,6 +11,7 @@ use golden_chain::mps::{
 };
 use golden_chain::planar;
 use num_complex::Complex64;
+use symtn::krylov::{self, Lanczos, Which, Workspace};
 use symtn::sector::TableRule;
 use symtn::typed::{Runtime, TensorMap};
 
@@ -171,19 +172,108 @@ fn full_rank_effective_hamiltonian_is_the_ed_hamiltonian() {
 }
 
 /// T4 with truncated bonds: `H_eff` is the Galerkin projection,
-/// `⟨Ψ(θ'), Ψ(H_eff θ)⟩ = ⟨Ψ(θ'), H Ψ(θ)⟩`.
+/// `⟨θ', H_eff θ⟩ = d_total ⟨Ψ(θ'), H Ψ(θ)⟩_ED`. symtn's `inner` weights
+/// each coupled sector by its quantum dimension, and every path of `Ψ` ends
+/// in the coupled sector `x_L = total`, so the isometric embedding scales the
+/// ED dot product by `d_total` (1 or φ).
 #[test]
 fn truncated_effective_hamiltonian_is_the_projected_ed_hamiltonian() {
-    for pos in 1..8 {
-        let s = setup(8, Fib::Tau, 2, pos, 1.0);
-        let (theta, other) = (s.theta(3), s.theta(4));
-        let bra = s.embed(&other);
-        let lhs = dot(&bra, &s.embed(&s.heff.apply(&theta).unwrap()));
-        let rhs = dot(&bra, &s.ed_apply(&s.embed(&theta)));
-        assert!(
-            (lhs - rhs).norm() <= TOL * rhs.norm().max(1.0),
-            "pos {pos}: {lhs} != {rhs}"
-        );
+    for (total, d) in [(Fib::One, 1.0), (Fib::Tau, phi())] {
+        for pos in 1..8 {
+            let s = setup(8, total, 2, pos, 1.0);
+            let (theta, other) = (s.theta(3), s.theta(4));
+            let bra = s.embed(&other);
+            let overlap = other.inner(&theta).unwrap();
+            let ed_overlap = d * dot(&bra, &s.embed(&theta));
+            assert!(
+                (overlap - ed_overlap).norm() <= TOL * ed_overlap.norm().max(1.0),
+                "total {total:?} pos {pos}: {overlap} != {ed_overlap}"
+            );
+            let lhs = other.inner(&s.heff.apply(&theta).unwrap()).unwrap();
+            let rhs = d * dot(&bra, &s.ed_apply(&s.embed(&theta)));
+            assert!(
+                (lhs - rhs).norm() <= TOL * rhs.norm().max(1.0),
+                "total {total:?} pos {pos}: {lhs} != {rhs}"
+            );
+        }
+    }
+}
+
+/// Lowest eigenvalue of a dense row-major real symmetric matrix by cyclic
+/// Jacobi rotations; symtn- and krylov-independent.
+fn jacobi_lowest(mut a: Vec<f64>, n: usize) -> f64 {
+    for _ in 0..100 {
+        let off: f64 = (0..n)
+            .flat_map(|i| (0..n).filter(move |&j| j != i).map(move |j| (i, j)))
+            .map(|(i, j)| a[i * n + j].powi(2))
+            .sum();
+        if off < 1e-30 {
+            break;
+        }
+        for p in 0..n {
+            for q in p + 1..n {
+                if a[p * n + q].abs() < 1e-300 {
+                    continue;
+                }
+                let tau = (a[q * n + q] - a[p * n + p]) / (2.0 * a[p * n + q]);
+                let t = tau.signum() / (tau.abs() + (1.0 + tau * tau).sqrt());
+                let t = if tau == 0.0 { 1.0 } else { t };
+                let (c, sn) = (1.0 / (1.0 + t * t).sqrt(), t / (1.0 + t * t).sqrt());
+                for k in 0..n {
+                    let (akp, akq) = (a[k * n + p], a[k * n + q]);
+                    a[k * n + p] = c * akp - sn * akq;
+                    a[k * n + q] = sn * akp + c * akq;
+                }
+                for k in 0..n {
+                    let (apk, aqk) = (a[p * n + k], a[q * n + k]);
+                    a[p * n + k] = c * apk - sn * aqk;
+                    a[q * n + k] = sn * apk + c * aqk;
+                }
+            }
+        }
+    }
+    (0..n).map(|i| a[i * n + i]).fold(f64::INFINITY, f64::min)
+}
+
+/// The Jacobi oracle on the TensorKit-pinned three-anyon matrix (T1).
+#[test]
+fn jacobi_oracle_matches_the_three_anyon_ground_energy() {
+    let chain = Chain::new(3, Boundary::Open(Fib::Tau));
+    let e0 = jacobi_lowest(chain.hamiltonian(1.0), chain.dim());
+    // Lowest eigenvalue of -[[a, b], [b, c]] (T1's matrix), by hand.
+    let (a, b, c) = (1.0 + phi().powi(-2), phi().powf(-1.5), phi().recip());
+    let hand = -((a + c) + ((a - c).powi(2) + 4.0 * b * b).sqrt()) / 2.0;
+    assert!((e0 - hand).abs() <= 1e-13, "{e0} != {hand}");
+}
+
+/// Down payment on S2's T6: with full bond spaces `H_eff` is the whole ED
+/// Hamiltonian, so `symtn::krylov::eigsolve` on the `H_eff` closure returns
+/// the ED ground energy, at every bond, for both couplings and both total
+/// charges.
+#[test]
+fn lanczos_on_the_effective_hamiltonian_finds_the_ed_ground_energy() {
+    let len = 6;
+    for total in [Fib::One, Fib::Tau] {
+        for j in [1.0, -1.0] {
+            let chain = Chain::new(len, Boundary::Open(total));
+            let e0 = jacobi_lowest(chain.hamiltonian(j), chain.dim());
+            for pos in 1..len {
+                let rule = Arc::new(TableRule::fibonacci());
+                let v = exact_spaces(&rule, len, total, pos);
+                let s = setup_with(rule, v, total, pos, j);
+                let x0 = s.theta(21 + pos as u64);
+                let mut op = |x: &Tensor, y: &mut Tensor| s.heff.apply_into(x, y);
+                let alg = Lanczos::new().krylovdim(chain.dim().max(2)).tol(1e-12);
+                let mut ws = Workspace::with_capacity(&x0, alg.get_krylovdim()).unwrap();
+                let (values, _, _) =
+                    krylov::eigsolve(&mut op, &x0, 1, Which::SmallestReal, &alg, &mut ws).unwrap();
+                assert!(
+                    (values[0] - e0).abs() <= 1e-10,
+                    "total {total:?} J {j} pos {pos}: {} != {e0}",
+                    values[0]
+                );
+            }
+        }
     }
 }
 

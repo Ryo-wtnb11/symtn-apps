@@ -16,7 +16,7 @@
 use symtn::typed::{Error, Runtime, TensorMap};
 
 use crate::ed::Fib;
-use crate::model::{ONE, Space, Tensor, label};
+use crate::model::{ONE, Space, Tensor, ZERO, label};
 use crate::planar;
 
 /// `AL ∈ [v_prev, p] <- [v]`, the canonical (partial-identity) isometry.
@@ -117,6 +117,12 @@ impl Heff {
             .axpby(ONE, &theta.compose(&self.or_dom)?, ONE)?
             .axpby(ONE, &bond, ONE)
     }
+
+    /// `out ← H_eff θ`, the shape of a `symtn::krylov::LinearMap` closure:
+    /// `|x, y| heff.apply_into(x, y)`.
+    pub fn apply_into(&self, theta: &Tensor, out: &mut Tensor) -> Result<(), Error> {
+        self.apply(theta)?.axpby_into(out, ONE, ZERO)
+    }
 }
 
 /// Contracts `pieces`, each `[V] <- [V', …]` (an `AL.repartition(1)`, a θ
@@ -149,4 +155,22 @@ pub fn amplitudes(psi: &Tensor) -> Result<Vec<(Vec<Fib>, num_complex::Complex64)
             Ok((path, value))
         })
         .collect()
+}
+
+/// Von Neumann entanglement entropy of a Schmidt spectrum given per sector,
+/// in MPSKit's convention (0.13.13 `src/algorithms/toolbox.jl:entropy`):
+/// `S = -Σ_s d_s Σ_k λ²_{s,k} ln λ²_{s,k}`, with values `λ < ε` dropped and
+/// the spectrum normalized as `Σ_s d_s Σ_k λ²_{s,k} = 1`.
+pub fn entropy<'a>(spectrum: impl IntoIterator<Item = (Fib, &'a [f64])>) -> f64 {
+    -spectrum
+        .into_iter()
+        .map(|(s, values)| {
+            let sum: f64 = values
+                .iter()
+                .filter(|&&x| x >= f64::EPSILON)
+                .map(|&x| x * x * (x * x).ln())
+                .sum();
+            crate::ed::quantum_dim(s) * sum
+        })
+        .sum::<f64>()
 }
