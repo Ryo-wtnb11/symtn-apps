@@ -12,5 +12,7 @@ publish = false
 [workspace.dependencies]
 # Pinned by rev: an application must be reproducible against the exact
 # symtn it was validated with. Bump in a dedicated commit.
-symtn = { git = "https://github.com/Ryo-wtnb11/symtn-rs", rev = "2076575e9b55683b59093079e47624cd7c0608fb" }
+# `krylov` declares LAPACK, so the binary needs a provider; `blas-openblas`
+# is symtn's own krylov feature contract (no default `cpu-faer`).
+symtn = { git = "https://github.com/Ryo-wtnb11/symtn-rs", rev = "54c3d162e4e751122ad7f35e537b3f8d3ea45ddc", default-features = false, features = ["krylov", "blas-openblas"] }
 num-complex = "0.4"

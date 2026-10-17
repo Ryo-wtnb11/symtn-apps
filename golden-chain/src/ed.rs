@@ -25,6 +25,14 @@ pub fn phi() -> f64 {
     (1.0 + 5.0_f64.sqrt()) / 2.0
 }
 
+/// Quantum dimension: `d_1 = 1`, `d_τ = φ`.
+pub fn quantum_dim(x: Fib) -> f64 {
+    match x {
+        Fib::One => 1.0,
+        Fib::Tau => phi(),
+    }
+}
+
 /// Fusion-path basis of `len` τ anyons.
 #[derive(Debug)]
 pub struct Chain {

@@ -24,8 +24,19 @@ are checked in as fixtures (CI never runs Julia).
 
 ## Dependencies
 
-symtn (and krylov-rs, once the eigensolver lands) are git dependencies pinned
-by revision; `Cargo.lock` is committed and CI builds with `--locked`.
+symtn is a git dependency pinned by revision; `Cargo.lock` is committed and
+CI builds with `--locked`.
+
+| Dependency | Pin | Features |
+| --- | --- | --- |
+| symtn | [`54c3d16`](https://github.com/Ryo-wtnb11/symtn-rs/commit/54c3d162e4e751122ad7f35e537b3f8d3ea45ddc) | `krylov`, `blas-openblas` (no default `cpu-faer`) |
+| krylov | via symtn's re-export `symtn::krylov` (krylov 0.1 from crates.io) | — |
+
+The Lanczos eigensolver is reached only through `symtn::krylov`, so the app
+can never resolve a second krylov whose `Vector` trait would not unify with
+symtn's `TensorMap` impl. krylov declares LAPACK; symtn's `blas-openblas`
+links OpenBLAS, built from source by `openblas-src` (no system library is
+needed, the first build takes several minutes).
 
 ## References
 
