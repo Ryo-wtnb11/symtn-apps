@@ -9,11 +9,10 @@ use golden_chain::mps::{
     Heff, amplitudes, contract_chain, left_isometry, left_operator, right_isometry, right_operator,
     rot,
 };
-use golden_chain::planar;
 use num_complex::Complex64;
 use symtn::krylov::{self, Lanczos, Which, Workspace};
 use symtn::sector::TableRule;
-use symtn::typed::{Runtime, TensorMap};
+use symtn::typed::{ContractSpec, Runtime, TensorMap};
 
 const TOL: f64 = 1e-12;
 
@@ -246,30 +245,34 @@ fn jacobi_oracle_matches_the_three_anyon_ground_energy() {
     assert!((e0 - hand).abs() <= 1e-13, "{e0} != {hand}");
 }
 
-/// Down payment on S2's T6: with full bond spaces `H_eff` is the whole ED
-/// Hamiltonian, so `symtn::krylov::eigsolve` on the `H_eff` closure returns
-/// the ED ground energy, at every bond, for both couplings and both total
-/// charges.
+/// T6, exact embedding: with full bond spaces `H_eff` at the centre bond is
+/// the whole ED Hamiltonian, so `symtn::krylov::eigsolve` on [`Heff`] as a
+/// `LinearMap` returns the Jacobi ED ground energy, for both couplings and
+/// both total charges. No truncation and no SVD are involved.
 #[test]
-fn lanczos_on_the_effective_hamiltonian_finds_the_ed_ground_energy() {
-    let len = 6;
-    for total in [Fib::One, Fib::Tau] {
-        for j in [1.0, -1.0] {
-            let chain = Chain::new(len, Boundary::Open(total));
-            let e0 = jacobi_lowest(chain.hamiltonian(j), chain.dim());
-            for pos in 1..len {
+fn centre_bond_lanczos_finds_the_ed_ground_energy() {
+    // L = 12 has 89 / 144 paths; the dense Jacobi oracle bounds the range.
+    for len in 6..=12 {
+        let pos = len / 2;
+        for total in [Fib::One, Fib::Tau] {
+            for j in [1.0, -1.0] {
+                let chain = Chain::new(len, Boundary::Open(total));
+                let e0 = jacobi_lowest(chain.hamiltonian(j), chain.dim());
                 let rule = Arc::new(TableRule::fibonacci());
                 let v = exact_spaces(&rule, len, total, pos);
-                let s = setup_with(rule, v, total, pos, j);
-                let x0 = s.theta(21 + pos as u64);
-                let mut op = |x: &Tensor, y: &mut Tensor| s.heff.apply_into(x, y);
-                let alg = Lanczos::new(chain.dim().max(2), 100, 1e-12);
+                let mut s = setup_with(rule, v, total, pos, j);
+                let x0 = s.theta(21 + len as u64);
+                // MPSKit's DMRG krylovdim; restarts cover dim > 30; a 1e-12
+                // residual bounds the eigenvalue error far below 1e-10.
+                let alg = Lanczos::new(30, 100, 1e-12);
                 let mut ws = Workspace::with_capacity(&x0, alg.get_krylovdim()).unwrap();
-                let (values, _, _) =
-                    krylov::eigsolve(&mut op, &x0, 1, Which::SmallestReal, &alg, &mut ws).unwrap();
+                let (values, _, info) =
+                    krylov::eigsolve(&mut s.heff, &x0, 1, Which::SmallestReal, &alg, &mut ws)
+                        .unwrap();
+                assert!(info.converged >= 1, "L {len} total {total:?} J {j}");
                 assert!(
                     (values[0] - e0).abs() <= 1e-10,
-                    "total {total:?} J {j} pos {pos}: {} != {e0}",
+                    "L {len} total {total:?} J {j}: {} != {e0}",
                     values[0]
                 );
             }
@@ -293,9 +296,15 @@ fn planar_steps_round_trip_and_reject_non_planar_cuts() {
         .unwrap();
     // h's planar order is (a, b, d, c): (a, d) is not contiguous.
     let h = bond_term(&s.rt, &s.p, 1.0).unwrap();
-    assert!(planar::contract(&h, &[0, 3], &theta, &[1, 3]).is_err());
+    let cut = |lhs, rhs| ContractSpec {
+        lhs,
+        rhs,
+        codomain: &[2, 0],
+        domain: &[3, 1],
+    };
+    assert!(h.planar_contract(&theta, &cut(&[0, 3], &[1, 3])).is_err());
     // θ's planar order is (l, p1, p2, r): pairing (c, d) with (p2, p1) twists.
-    assert!(planar::contract(&h, &[3, 2], &theta, &[1, 3]).is_err());
+    assert!(h.planar_contract(&theta, &cut(&[3, 2], &[1, 3])).is_err());
 }
 
 /// T5. The right term's shortcut: `θ ∘ rot(OR̃) = rot(OR̃ ∘ rot(θ))`, so the
