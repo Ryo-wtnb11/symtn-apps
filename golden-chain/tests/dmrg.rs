@@ -59,8 +59,9 @@ fn dmrg_ground_energy_matches_ed() {
 /// eigenvalues of `M_x M_xᵀ`, `M_x[left path, right path]` the amplitudes
 /// with `x_bond = x`.
 fn ed_schmidt(chain: &Chain, psi: &[f64], bond: usize) -> BTreeMap<Fib, Vec<f64>> {
-    let mut blocks: BTreeMap<Fib, (Vec<&[Fib]>, Vec<&[Fib]>, Vec<(usize, usize, f64)>)> =
-        BTreeMap::new();
+    // Per sector: left prefixes (rows), right suffixes (columns), entries.
+    type Block<'a> = (Vec<&'a [Fib]>, Vec<&'a [Fib]>, Vec<(usize, usize, f64)>);
+    let mut blocks: BTreeMap<Fib, Block> = BTreeMap::new();
     for (path, &value) in chain.paths().iter().zip(psi) {
         let (rows, cols, entries) = blocks.entry(path[bond]).or_default();
         fn index<'a>(list: &mut Vec<&'a [Fib]>, key: &'a [Fib]) -> usize {

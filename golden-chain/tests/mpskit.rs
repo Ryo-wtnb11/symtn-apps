@@ -126,16 +126,14 @@ fn dmrg_matches_mpskit_fixture() {
             gs.energy,
             case.energy
         );
-        let entropies = gs.entropies();
-        for bond in 0..case.len - 1 {
-            let d = spectrum_distance(&gs.spectra[bond], &case.spectra[bond]);
-            assert!(d <= TOL, "{what} bond {}: spectra differ by {d}", bond + 1);
+        let ours = gs.spectra.iter().zip(gs.entropies());
+        let theirs = case.spectra.iter().zip(&case.entropy);
+        for (bond, ((ours, s), (theirs, t))) in (1..).zip(ours.zip(theirs)) {
+            let d = spectrum_distance(ours, theirs);
+            assert!(d <= TOL, "{what} bond {bond}: spectra differ by {d}");
             assert!(
-                (entropies[bond] - case.entropy[bond]).abs() <= TOL,
-                "{what} bond {}: S {} != MPSKit {}",
-                bond + 1,
-                entropies[bond],
-                case.entropy[bond]
+                (s - t).abs() <= TOL,
+                "{what} bond {bond}: S {s} != MPSKit {t}"
             );
         }
     }
