@@ -14,6 +14,7 @@
 //!   error is O(1) as well, and either way the clamp gives `tol_max`.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use num_complex::Complex64;
 use symtn::krylov::{self, Lanczos, Which, Workspace};
@@ -42,6 +43,9 @@ pub struct Dmrg2 {
     pub krylovdim: usize,
     /// Lanczos restarts (MPSKit `Defaults.maxiter` for `alg_eigsolve`).
     pub eig_maxiter: usize,
+    /// Lanczos convergence check after every Krylov expansion instead of
+    /// only at full `krylovdim` (MPSKit `Defaults.alg_eigsolve` `eager`).
+    pub eig_eager: bool,
     /// `updatetol` clamp and factor: `clamp(ϵ·factor/√iter, min, max)`
     /// (MPSKit `Defaults.{tol_min, tol_max, eigs_tolfactor}`).
     pub eig_tol_min: f64,
@@ -69,6 +73,16 @@ pub struct SweepLog {
     /// Bond eigensolves whose residual did not reach the tolerance
     /// (MPSKit only warns, so this is reported, not an error).
     pub unconverged: usize,
+    /// `H_eff` applications of all bond eigensolves (krylov `numops`).
+    pub matvecs: usize,
+    /// Wall time of the sweep, and its parts: the bond eigensolves, the
+    /// truncated SVDs with normalization and `ϵ_bond`, and the environment
+    /// steps with the next centre and `H_eff` construction. The rest (the
+    /// energy at the end of the sweep) is in `seconds` only.
+    pub seconds: f64,
+    pub eigsolve_seconds: f64,
+    pub svd_seconds: f64,
+    pub environment_seconds: f64,
 }
 
 /// A Schmidt spectrum per sector, `(x, λ_x)`, normalized as
@@ -78,6 +92,9 @@ pub type Spectrum = Vec<(Fib, Vec<f64>)>;
 #[derive(Clone, Debug)]
 pub struct GroundState {
     pub energy: f64,
+    /// Wall time from the start of the call to the first sweep: virtual
+    /// spaces, initial sites, all right environments and the first centre.
+    pub setup_seconds: f64,
     pub converged: bool,
     pub sweeps: Vec<SweepLog>,
     /// Entanglement spectra of bonds `1..L-1` (MPSKit
@@ -96,17 +113,24 @@ impl GroundState {
 }
 
 /// Ground state of `H = -J Σ P^(1)` on `len` anyons with `x_L = total`.
-pub fn find_groundstate(len: usize, j: f64, total: Fib, alg: &Dmrg2) -> Result<GroundState, Error> {
+/// Every tensor is created on `rt`, so its CPU pool sets the thread count.
+pub fn find_groundstate(
+    rt: &Runtime,
+    len: usize,
+    j: f64,
+    total: Fib,
+    alg: &Dmrg2,
+) -> Result<GroundState, Error> {
+    let start = Instant::now();
     if len < 3 || alg.schedule.is_empty() || alg.maxiter < alg.schedule.len() {
         return Err(Error::InvalidArgument(
             "DMRG2 needs L >= 3, a nonempty schedule and maxiter >= schedule.len()".into(),
         ));
     }
     let rule = Arc::new(TableRule::fibonacci());
-    let rt = Runtime::builder().build()?;
     let p = physical(&rule)?;
-    let h = bond_term(&rt, &p, j)?;
-    let id_p = TensorMap::isomorphism(&rt, [&p], [&p])?;
+    let h = bond_term(rt, &p, j)?;
+    let id_p = TensorMap::isomorphism(rt, [&p], [&p])?;
     // MPSKit's hard-hexagon `virtual_space`: the bond dimension split evenly
     // over the sectors, so the total quantum dimension is about `D`.
     let share = alg.schedule[0] as f64 / (quantum_dim(Fib::One) + quantum_dim(Fib::Tau));
@@ -114,29 +138,32 @@ pub fn find_groundstate(len: usize, j: f64, total: Fib, alg: &Dmrg2) -> Result<G
 
     // Site k (1-based) at index k-1. Left of the centre: AL form; right: B.
     let mut sites: Vec<Tensor> = (1..=len)
-        .map(|k| right_isometry(&rt, &v[k - 1], &p, &v[k]))
+        .map(|k| right_isometry(rt, &v[k - 1], &p, &v[k]))
         .collect::<Result<_, _>>()?;
     // ol[i] = OL_{i+1}; or[i] = OR̃_i (OR̃_L = 0 on [P, V_L*]).
-    let mut ol = vec![TensorMap::zeros(&rt, [&v[0], &p], [&v[0], &p])?];
+    let mut ol = vec![TensorMap::zeros(rt, [&v[0], &p], [&v[0], &p])?];
     let vl_dual = v[len].try_dual()?;
-    let mut or = vec![TensorMap::zeros(&rt, [&p, &vl_dual], [&p, &vl_dual])?; len + 1];
+    let mut or = vec![TensorMap::zeros(rt, [&p, &vl_dual], [&p, &vl_dual])?; len + 1];
     for k in (2..=len).rev() {
         or[k - 1] = right_step(&or[k], &sites[k - 1], &h, &id_p)?;
     }
 
-    let mut theta = TensorMap::rand_with_seed(&rt, [&v[0], &p], [&v[2], &p.try_dual()?], alg.seed)?;
+    let mut theta = TensorMap::rand_with_seed(rt, [&v[0], &p], [&v[2], &p.try_dual()?], alg.seed)?;
+    let setup_seconds = start.elapsed().as_secs_f64();
     let mut epsilon = 1.0;
     let mut sweeps: Vec<SweepLog> = Vec::new();
     let mut converged = false;
     let mut last = None;
     for iter in 1..=alg.maxiter {
+        let sweep_start = Instant::now();
         let rank = alg.schedule[(iter - 1).min(alg.schedule.len() - 1)];
         let eig = Lanczos::new(
             alg.krylovdim,
             alg.eig_maxiter,
             (epsilon * alg.eig_tol_factor / (iter as f64).sqrt())
                 .clamp(alg.eig_tol_min, alg.eig_tol_max),
-        );
+        )
+        .eager(alg.eig_eager);
         let mut log = SweepLog {
             bond_dimension: rank,
             energy: f64::NAN,
@@ -144,15 +171,26 @@ pub fn find_groundstate(len: usize, j: f64, total: Fib, alg: &Dmrg2) -> Result<G
             max_truncation_error: 0.0,
             epsilon: 0.0,
             unconverged: 0,
+            matvecs: 0,
+            seconds: 0.0,
+            eigsolve_seconds: 0.0,
+            svd_seconds: 0.0,
+            environment_seconds: 0.0,
         };
         let forward = (1..len).map(|pos| (pos, true));
         let backward = (1..len - 1).rev().map(|pos| (pos, false));
         for (pos, right) in forward.chain(backward) {
+            let clock = Instant::now();
             let heff = Heff::new(ol[pos - 1].clone(), &or[pos + 1], h.clone())?;
+            log.environment_seconds += clock.elapsed().as_secs_f64();
             let bond = update_bond(heff, &theta, rank, &eig)?;
             log.max_truncation_error = log.max_truncation_error.max(bond.truncation_error);
             log.epsilon = log.epsilon.max(bond.epsilon);
             log.unconverged += usize::from(!bond.converged);
+            log.matvecs += bond.matvecs;
+            log.eigsolve_seconds += bond.eigsolve_seconds;
+            log.svd_seconds += bond.svd_seconds;
+            let clock = Instant::now();
             let Svd { u, s, vh } = bond.factors;
             if right {
                 ol.truncate(pos);
@@ -174,15 +212,17 @@ pub fn find_groundstate(len: usize, j: f64, total: Fib, alg: &Dmrg2) -> Result<G
                 } else {
                     u.compose(&s)?.compose(&vh)?
                 };
-                if pos == 1 {
-                    let energy = energy(&bond.heff, &theta)?;
-                    log.delta_energy = energy - sweeps.last().map_or(f64::NAN, |l| l.energy);
-                    log.energy = energy;
-                    last = Some(s);
-                }
+            }
+            log.environment_seconds += clock.elapsed().as_secs_f64();
+            if !right && pos == 1 {
+                let energy = energy(&bond.heff, &theta)?;
+                log.delta_energy = energy - sweeps.last().map_or(f64::NAN, |l| l.energy);
+                log.energy = energy;
+                last = Some(s);
             }
         }
         epsilon = log.epsilon;
+        log.seconds = sweep_start.elapsed().as_secs_f64();
         sweeps.push(log);
         if iter >= alg.schedule.len() && epsilon <= alg.tol {
             converged = true;
@@ -192,6 +232,7 @@ pub fn find_groundstate(len: usize, j: f64, total: Fib, alg: &Dmrg2) -> Result<G
     let s = last.expect("maxiter >= schedule.len() >= 1 runs a sweep");
     Ok(GroundState {
         energy: sweeps.last().map_or(f64::NAN, |l| l.energy),
+        setup_seconds,
         converged,
         sweeps,
         spectra: spectra(s, &sites[1..len - 1])?,
@@ -204,6 +245,9 @@ struct BondUpdate {
     truncation_error: f64,
     epsilon: f64,
     converged: bool,
+    matvecs: usize,
+    eigsolve_seconds: f64,
+    svd_seconds: f64,
 }
 
 /// Lanczos, truncated SVD and normalization at one bond.
@@ -213,10 +257,13 @@ fn update_bond(
     rank: usize,
     alg: &Lanczos,
 ) -> Result<BondUpdate, Error> {
+    let clock = Instant::now();
     let mut ws = Workspace::with_capacity(theta, alg.get_krylovdim())?;
     let (_, mut vectors, info) =
         krylov::eigsolve(&mut heff, theta, 1, Which::SmallestReal, alg, &mut ws)
             .map_err(krylov_error)?;
+    let eigsolve_seconds = clock.elapsed().as_secs_f64();
+    let clock = Instant::now();
     let new = vectors.swap_remove(0);
     let Svd { u, s, vh } = new.svd_compact(&[0, 1], &[2, 3])?;
     let found = s.domain()[0].find_truncated(&s.diagview()?, &Truncation::Rank(rank))?;
@@ -226,6 +273,9 @@ fn update_bond(
     let s = s.scale(Complex64::new(1.0 / s.norm(2.0)?, 0.0))?;
     let overlap = theta.inner(&u.compose(&s)?.compose(&vh)?)?.norm() / theta.norm(2.0)?;
     Ok(BondUpdate {
+        svd_seconds: clock.elapsed().as_secs_f64(),
+        eigsolve_seconds,
+        matvecs: info.numops,
         heff,
         factors: Svd { u, s, vh },
         truncation_error: found.error,

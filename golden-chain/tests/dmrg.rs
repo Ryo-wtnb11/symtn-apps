@@ -38,8 +38,14 @@ fn dmrg_ground_energy_matches_ed() {
             for j in [1.0, -1.0] {
                 let chain = Chain::new(len, Boundary::Open(total));
                 let ed = common::lanczos_ground_energy(&chain, j);
-                let gs = find_groundstate(len, j, total, &common::mpskit_dmrg2(vec![32, 64, 128]))
-                    .unwrap();
+                let gs = find_groundstate(
+                    &common::runtime(),
+                    len,
+                    j,
+                    total,
+                    &common::mpskit_dmrg2(vec![32, 64, 128]),
+                )
+                .unwrap();
                 assert!(
                     gs.converged,
                     "L {len} total {total:?} J {j}: {:?}",
@@ -114,8 +120,14 @@ fn entanglement_spectrum_matches_ed_schmidt_values() {
         for j in [1.0, -1.0] {
             let chain = Chain::new(len, Boundary::Open(total));
             let (e0, psi) = common::jacobi_ground(chain.hamiltonian(j), chain.dim());
-            let gs: GroundState =
-                find_groundstate(len, j, total, &common::mpskit_dmrg2(vec![64])).unwrap();
+            let gs: GroundState = find_groundstate(
+                &common::runtime(),
+                len,
+                j,
+                total,
+                &common::mpskit_dmrg2(vec![64]),
+            )
+            .unwrap();
             assert!((gs.energy - e0).abs() <= 1e-10);
             for (bond, spectrum) in (1..len).zip(&gs.spectra) {
                 let ed = ed_schmidt(&chain, &psi, bond);
@@ -156,7 +168,7 @@ fn entanglement_spectrum_matches_ed_schmidt_values() {
 fn convergence_waits_for_the_last_bond_dimension() {
     let mut alg = common::mpskit_dmrg2(vec![32, 64, 128]);
     alg.eig_tol_max = 1e-4;
-    let gs = find_groundstate(20, 1.0, Fib::One, &alg).unwrap();
+    let gs = find_groundstate(&common::runtime(), 20, 1.0, Fib::One, &alg).unwrap();
     let dims: Vec<usize> = gs.sweeps.iter().map(|s| s.bond_dimension).collect();
     assert!(gs.converged);
     assert!(dims.len() >= 3, "stopped before D = 128: {dims:?}");
@@ -164,5 +176,5 @@ fn convergence_waits_for_the_last_bond_dimension() {
     assert!(dims[3..].iter().all(|&d| d == 128), "{dims:?}");
 
     alg.maxiter = 2;
-    assert!(find_groundstate(20, 1.0, Fib::One, &alg).is_err());
+    assert!(find_groundstate(&common::runtime(), 20, 1.0, Fib::One, &alg).is_err());
 }

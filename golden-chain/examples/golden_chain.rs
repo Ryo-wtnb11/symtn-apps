@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     for j in [1.0, -1.0] {
         let alg = common::mpskit_dmrg2(PROFILE_SCHEDULE.to_vec());
-        let gs = find_groundstate(PROFILE_LEN, j, Fib::One, &alg)?;
+        let gs = find_groundstate(&common::runtime(), PROFILE_LEN, j, Fib::One, &alg)?;
         for (l, s) in gs.entropies().iter().enumerate() {
             writeln!(profile, "{j},{},{s:.15e}", l + 1)?;
         }
@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for j in [1.0, -1.0] {
             for (total, name) in [(Fib::One, "1"), (Fib::Tau, "tau")] {
                 let alg = common::mpskit_dmrg2(vec![ED_D]);
-                let gs = find_groundstate(len, j, total, &alg)?;
+                let gs = find_groundstate(&common::runtime(), len, j, total, &alg)?;
                 let ed = common::lanczos_ground_energy(&Chain::new(len, Boundary::Open(total)), j);
                 writeln!(energies, "{len},{j},{name},{:.15e},{ed:.15e}", gs.energy)?;
             }

@@ -11,6 +11,7 @@ use std::convert::Infallible;
 use golden_chain::dmrg::Dmrg2;
 use golden_chain::ed::Chain;
 use symtn::krylov::{self, Lanczos, Which, Workspace};
+use symtn::typed::Runtime;
 
 /// Eigenvalues and row-major eigenvectors (column `k` belongs to value `k`)
 /// of a dense row-major real symmetric matrix, by cyclic Jacobi rotations.
@@ -111,9 +112,14 @@ pub fn lanczos_ground_energy(chain: &Chain, j: f64) -> f64 {
     values[0]
 }
 
+/// The runtime of the tests and examples: symtn's default CPU pool.
+pub fn runtime() -> Runtime {
+    Runtime::builder().build().unwrap()
+}
+
 /// MPSKit 0.13.13 `DMRG2` and `Defaults` values, spelled out (`tol = 1e-10`,
-/// `krylovdim = 30`, eigensolver `maxiter = 200`, `updatetol` floor `1e-14`
-/// and factor `1e-3`), with two changes:
+/// `krylovdim = 30`, eigensolver `maxiter = 200`, eager Lanczos, `updatetol`
+/// floor `1e-14` and factor `1e-3`), with two changes:
 /// - the `updatetol` ceiling is 1e-12, not 1e-4. At 1e-4 the second sweep's
 ///   eigensolves are already below tolerance at their start vectors and
 ///   return them unchanged, so `ϵ ≈ 1e-14` stops the run early. Measured
@@ -132,6 +138,7 @@ pub fn mpskit_dmrg2(schedule: Vec<usize>) -> Dmrg2 {
         maxiter: 50,
         krylovdim: 30,
         eig_maxiter: 200,
+        eig_eager: true,
         eig_tol_min: 1e-14,
         eig_tol_max: 1e-12,
         eig_tol_factor: 1e-3,

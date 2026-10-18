@@ -52,8 +52,14 @@ fn central_charge_from_the_entanglement_profile() {
     // 20, 24). D = 128 in the last sweep keeps the truncation error ≲ 1e-8.
     const LEN: usize = 96;
     for (j, expected) in [(1.0, 0.7), (-1.0, 0.8)] {
-        let gs =
-            find_groundstate(LEN, j, Fib::One, &common::mpskit_dmrg2(vec![32, 64, 128])).unwrap();
+        let gs = find_groundstate(
+            &common::runtime(),
+            LEN,
+            j,
+            Fib::One,
+            &common::mpskit_dmrg2(vec![32, 64, 128]),
+        )
+        .unwrap();
         let c = central_charge(&gs.entropies(), LEN);
         let last = gs.sweeps.last().unwrap();
         eprintln!(
