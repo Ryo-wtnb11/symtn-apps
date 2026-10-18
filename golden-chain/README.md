@@ -113,6 +113,81 @@ where the centre bond is truncated.
 
 ![|E_DMRG − E_ED| against L](docs/figures/energy_error.png)
 
+## Performance
+
+Accuracy is checked against the ED (see Validation). MPSKit 0.13.13 is the
+reference for speed only. Both sides run the same model and the same
+settings: `truncrank(D)`, `tol = 1e-10`, Lanczos with `krylovdim = 30`,
+`maxiter = 200`, eager, and the `updatetol` clamp with `tol_max = 1e-12`.
+Two differences remain, and every result CSV header records both:
+- the Lanczos orthogonalization: krylov's `Cgs2` makes two full passes over
+  the basis per step, KrylovKit's `ModifiedGramSchmidt2` makes the
+  three-term recurrence plus one pass;
+- the initial state: symtn uses right-isometric sites and a seeded random
+  first centre; MPSKit uses a seeded random `FiniteMPS`. The initial
+  virtual spaces are the same.
+
+The harness is `examples/bench_dmrg.rs` and `bench/mpskit/bench.jl`
+(pinned `Project.toml` and `Manifest.toml`), driven one case per process
+by `bench/run.sh`, or by `bench/bench.pbs` on an exclusive cluster node.
+Each row records the thread settings the process reports, its CPU use and
+peak RSS from GNU `time -v`, and its `numactl` binding.
+`uv run golden-chain/scripts/plot_bench.py <results dir>` turns the rows
+into tables and figures. Three first-result timings are reported. Each is
+setup plus the first sweep of the target case:
+- a fresh process: for Julia this includes JIT compilation; Rust is
+  compiled ahead of time;
+- a fresh Julia process started on a sysimage of the bench path
+  (`bench/build_sysimage.sh`, PackageCompiler);
+- the same process after a one-sweep run of a tiny different case
+  (L = 6, D = 8).
+
+### Where the time goes
+
+The case is L = 48, D = 128, J = +1, measured on one Xeon Platinum 9242
+node, bound to one 24-core NUMA node. Times are the mean per steady sweep
+(sweeps 2-4), in seconds:
+
+| | sweep | eigensolve | of which H_eff | Lanczos vector work | SVD | environments | H_eff applications |
+|---|---|---|---|---|---|---|---|
+| symtn, 1 thread | 2.28 | 2.05 | 0.34 | 1.71 | 0.16 | 0.06 | 934 |
+| MPSKit, 1 thread | 0.72 | 0.37 | 0.25 | 0.12 | 0.18 | 0.18 | 459 |
+
+- **H_eff.** symtn's application is faster per call: 0.37 ms against
+  MPSKit's 0.55 ms. Both reduce the nearest-neighbour MPO to the same three
+  terms: left operator, bond term, right operator.
+- **Lanczos vector work.** symtn's eigensolve time is dominated by the
+  Krylov process, not by H_eff: 1.83 ms of vector work per step against
+  MPSKit's 0.26 ms. The centre has 11,600 complex entries. On it one symtn
+  `inner` takes 28 µs, `axpby` 14 µs and `norm` 28 µs, against 12 µs and
+  7 µs for a plain slice pass of the same length. With `Cgs2`'s second full
+  pass, symtn therefore does about twice the passes of KrylovKit, each about
+  twice as expensive.
+- **Sweeps and matvec counts.** symtn converges in three sweeps and MPSKit
+  in two from their different initial states. The steady sweeps therefore
+  run at different eigensolver tolerances, and symtn does about twice the
+  H_eff applications per sweep.
+- **Block sizes.** The bulk bond space is `1 ⊕ τ` with degeneracies about
+  36 and 56. The two-site centre has exactly two coupled blocks, 56 × 56
+  and 92 × 92.
+
+### Threads
+
+At these block sizes more threads do not help either library. Both runs
+use the same binding, with BLAS single-threaded on both sides:
+- symtn with `dense_threads(16)` and `recoupling_threads(16)` takes
+  2.48 s per sweep against 2.28 s at one thread. CPU use is 111 %: the
+  runtime pool is entered, but the dominant vector operations run on the
+  calling thread.
+- MPSKit at `-t 16` takes 0.94 s against 0.72 s, measured with 16 BLAS
+  threads.
+- With 16 OpenBLAS threads instead, both sides burn about 16 cores
+  (1600 % and 790 %) in OpenBLAS's busy-wait and get no speedup. The GEMMs
+  are at most about 92³.
+
+Thread scaling is therefore measured on applications with many larger
+blocks, not on the golden chain.
+
 ## References
 
 - A. Feiguin, S. Trebst, A. W. W. Ludwig, M. Troyer, A. Kitaev, Z. Wang,

@@ -7,8 +7,8 @@
     golden-chain/bench/run.sh first-run|warm <dir> <threads> "<L...>" "<D...>"   # CSV in <dir>
     uv run golden-chain/scripts/plot_bench.py [<dir>]   # default golden-chain/bench/results
 
-Prints Markdown tables, writes <dir>/summary.csv and the figures
-docs/figures/dmrg2_first_run.png and docs/figures/dmrg2_threads_J{+1,-1}.png.
+Prints Markdown tables, writes <dir>/summary.csv and the figure
+docs/figures/dmrg2_first_run.png.
 
 Per case (side, threads, L, D, J):
 - first run (fresh process, setup plus first sweep): cold, cold_sysimage,
@@ -31,13 +31,11 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 import numpy as np
 
 APP = Path(__file__).resolve().parent.parent
 FIGURES = APP / "docs" / "figures"
 STEADY = (2, 3, 4)
-THREADS = (1, 2, 4, 8, 16, 32)
 FIRST_KINDS = (
     ("symtn", "cold", "symtn, fresh process"),
     ("symtn", "first_after_compile", "symtn, after warm-up"),
@@ -45,11 +43,6 @@ FIRST_KINDS = (
     ("MPSKit", "cold_sysimage", "MPSKit, fresh process with sysimage"),
     ("MPSKit", "first_after_compile", "MPSKit, after warm-up"),
 )
-STYLE = {
-    "symtn": dict(marker="*", linestyle="-", markerfacecolor="none", markersize=11),
-    "MPSKit": dict(marker="o", linestyle=":", markerfacecolor="none", markersize=7),
-}
-D_COLORS = {64: "tab:blue", 128: "tab:orange", 256: "tab:green"}
 
 
 def rows(path):
@@ -148,30 +141,6 @@ def first_run_figure(s, length=48, d=64):
     fig.savefig(FIGURES / "dmrg2_first_run.png", dpi=150, bbox_inches="tight")
 
 
-def threads_figure(s, j, length=96):
-    if not any(k[2] == length and k[4] == j and "sweep_s" in v for k, v in s.items()):
-        return
-    fig, ax = plt.subplots(figsize=(6.5, 4.5))
-    for side, style in STYLE.items():
-        for d, color in D_COLORS.items():
-            pts = [(t, s[k]["sweep_s"]) for t in THREADS if "sweep_s" in s.get(k := (side, t, length, d, j), {})]
-            if pts:
-                ax.plot(*zip(*pts), color=color, **style)
-    ax.set_xscale("log", base=2)
-    ax.set_yscale("log")
-    ax.set_xticks(THREADS, [str(t) for t in THREADS])
-    ax.minorticks_off()
-    ax.set_xlabel("threads")
-    ax.set_ylabel("seconds per sweep (median of sweeps 2-4)")
-    ax.set_title(f"DMRG2 per-sweep wall time, L = {length}, J = {j:+d}")
-    colors = [Line2D([], [], color=c, lw=2, label=f"D = {d}") for d, c in D_COLORS.items()]
-    sides = [Line2D([], [], color="black", label=side, **st) for side, st in STYLE.items()]
-    first = ax.legend(handles=colors, title="bond dimension", fontsize=8, loc="upper left", bbox_to_anchor=(1.02, 1))
-    ax.add_artist(first)
-    ax.legend(handles=sides, title="library", fontsize=8, loc="upper left", bbox_to_anchor=(1.02, 0.5))
-    fig.savefig(FIGURES / f"dmrg2_threads_J{j:+d}.png", dpi=150, bbox_inches="tight")
-
-
 def write_summary(s, path):
     fields = sorted({f for v in s.values() for f in v})
     with open(path, "w", newline="") as f:
@@ -193,5 +162,3 @@ if __name__ == "__main__":
     for threads in sorted({k[1] for k in s}):
         warm_tables(s, threads)
     first_run_figure(s)
-    for j in (1, -1):
-        threads_figure(s, j)

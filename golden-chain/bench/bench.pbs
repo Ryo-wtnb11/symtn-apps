@@ -15,7 +15,10 @@
 #
 # STAGE first-and-1: first-result rows (1 thread, all cases) and warm rows at
 #   1 thread for L in {24, 48, 96};
-# STAGE threads: warm rows at L = 96 for 2, 4, 8, 16, 32 threads.
+# STAGE threads: warm rows at 16 threads for L = 48, D = 128, J = +1, the
+#   check that more threads do not help at the golden chain's block sizes
+#   (two coupled blocks of at most ~100); thread scaling belongs to apps
+#   with many larger blocks.
 #PBS -N gc-bench
 #PBS -q workq
 #PBS -l select=1:ncpus=96:mem=64gb
@@ -53,9 +56,7 @@ first-and-1)
     stdbuf -oL -eL "$app/bench/run.sh" warm "$results" 1 "$lens" "$ds"
     ;;
 threads)
-    for t in 2 4 8 16 32; do
-        stdbuf -oL -eL "$app/bench/run.sh" warm "$results" "$t" 96 "$ds"
-    done
+    stdbuf -oL -eL "$app/bench/run.sh" warm "$results" 16 48 128 1
     ;;
 *)
     echo "unknown STAGE $stage" >&2

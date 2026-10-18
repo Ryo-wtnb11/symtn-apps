@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         (threads?.parse()?, len?.parse()?, d?.parse()?, j?.parse()?);
     // Every thread knob symtn has: the runtime CPU pool (dense kernels,
     // tree-transform replay, strided kernels) and the recoupling workers.
-    // BLAS threads are OpenBLAS's own (`OPENBLAS_NUM_THREADS`, set by run.sh).
+    // BLAS threads are OpenBLAS's own (`OPENBLAS_NUM_THREADS`, 1 in run.sh).
     let rt = Runtime::builder()
         .dense_threads(threads)
         .recoupling_threads(threads)

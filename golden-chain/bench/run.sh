@@ -34,8 +34,10 @@ case $mode in first-run | warm) ;; *) echo "$usage" >&2; exit 2 ;; esac
 mkdir -p "$outdir"
 out="$outdir/${mode}_t${threads}_L$(echo $lens | tr ' ' -)_D$(echo $ds | tr ' ' -).csv"
 
-# One BLAS pool per side of `threads` workers; nothing else spawns threads.
-export OPENBLAS_NUM_THREADS="$threads" OMP_NUM_THREADS="$threads" RAYON_NUM_THREADS="$threads"
+# `threads` sizes each library's own task threads; BLAS stays
+# single-threaded on both sides, so the two pools never oversubscribe the
+# bound cores (the golden chain's blocks are too small for BLAS threads).
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 RAYON_NUM_THREADS="$threads"
 cargo build -q --release --locked --example bench_dmrg --manifest-path "$app/Cargo.toml"
 "$julia" --project="$app/bench/mpskit" -e 'using Pkg; Pkg.instantiate()'
 
@@ -100,11 +102,11 @@ fi
     echo "# DMRG2 on the open golden chain, H = -J sum P^(1), total charge 1; golden-chain/bench/run.sh $mode $threads L=($lens) D=($ds) J=($js)"
     echo "# machine: $machine"
     echo "# symtn: $(rustc --version), symtn-apps $(git -C "$app" rev-parse --short HEAD), symtn $(grep -o 'rev = "[0-9a-f]*"' "$app/../Cargo.toml" | cut -c8-14), ${openblas:-OpenBLAS (openblas-src)} built from source by openblas-src, for GEMM and LAPACK"
-    echo "# symtn threads: Runtime::builder().dense_threads($threads).recoupling_threads($threads), OPENBLAS_NUM_THREADS=OMP_NUM_THREADS=RAYON_NUM_THREADS=$threads"
+    echo "# symtn threads: Runtime::builder().dense_threads($threads).recoupling_threads($threads), OPENBLAS_NUM_THREADS=OMP_NUM_THREADS=1"
     echo "# binding: $binding"
     echo "# columns: binding = the numactl binding of each process; reported = thread settings in effect as each process reports them; cpu_percent, max_rss_kb = GNU /usr/bin/time -v of that whole process (warm-up and every row it printed)"
     echo "# MPSKit: julia $("$julia" --version | awk '{print $3}'), MPSKit 0.13.13, TensorKit 0.17.1, TensorKitSectors 0.3.10, KrylovKit $(grep -A6 '^\[\[deps.KrylovKit\]\]' "$app/bench/mpskit/Manifest.toml" | awk -F'"' '/^version/{print $2}'), $("$julia" -e 'using LinearAlgebra; print(BLAS.get_config().loaded_libs[1].libname |> basename)') (Julia's OpenBLAS_jll)"
-    echo "# MPSKit threads: julia -t $threads, BLAS.set_num_threads($threads), MPSKit Defaults.scheduler default (Serial at 1 thread, Dynamic otherwise), TensorKit blockscheduler default (SerialScheduler)"
+    echo "# MPSKit threads: julia -t $threads, BLAS.set_num_threads(1), MPSKit Defaults.scheduler default (Serial at 1 thread, Dynamic otherwise), TensorKit blockscheduler default (SerialScheduler)"
     echo "# settings (both sides): D = truncrank(D) on the total quantum dimension; tol 1e-10, maxiter 50; Lanczos krylovdim 30, maxiter 200, eager; updatetol clamp(eps*1e-3/sqrt(sweep), 1e-14, 1e-12); initial virtual spaces D/(1+phi) per sector capped at the reachable space"
     echo "# differences: Lanczos orthogonalization is krylov Cgs2 (two full passes per step) in symtn and KrylovKit ModifiedGramSchmidt2 (three-term recurrence plus one full pass) in MPSKit; the initial state is right-isometric sites + a seeded random first centre in symtn and a seeded random FiniteMPS (Random.seed!(1234)) in MPSKit"
     if [ "$mode" = first-run ]; then

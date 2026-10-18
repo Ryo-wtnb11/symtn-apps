@@ -164,10 +164,13 @@ function main(args)
     length(args) >= 5 || error(usage)
     threads = parse(Int, args[2])
     Threads.nthreads() == threads || error("start julia with -t $threads")
-    # Threading knobs: julia -t, the BLAS pool, and MPSKit's default scheduler
+    # Threading knobs: julia -t and MPSKit's default scheduler
     # (`Defaults.scheduler`: Serial for one thread, Dynamic otherwise);
     # TensorKit's `blockscheduler` stays at its default, SerialScheduler.
-    BLAS.set_num_threads(threads)
+    # BLAS stays single-threaded, as on the Rust side: the blocks here are
+    # too small for BLAS threads to pay, and two thread pools would
+    # oversubscribe the bound cores.
+    BLAS.set_num_threads(1)
     if args[1] in ("cold", "first")
         L, D, J = parse(Int, args[3]), parse(Int, args[4]), parse(Float64, args[5])
         kind = if args[1] == "first"
