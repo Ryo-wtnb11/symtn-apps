@@ -252,6 +252,7 @@ fn jacobi_oracle_matches_the_three_anyon_ground_energy() {
 #[test]
 fn centre_bond_lanczos_finds_the_ed_ground_energy() {
     // L = 12 has 89 / 144 paths; the dense Jacobi oracle bounds the range.
+    let mut max_numiter = 0;
     for len in 6..=12 {
         let pos = len / 2;
         for total in [Fib::One, Fib::Tau] {
@@ -270,6 +271,7 @@ fn centre_bond_lanczos_finds_the_ed_ground_energy() {
                     krylov::eigsolve(&mut s.heff, &x0, 1, Which::SmallestReal, &alg, &mut ws)
                         .unwrap();
                 assert!(info.converged >= 1, "L {len} total {total:?} J {j}");
+                max_numiter = max_numiter.max(info.numiter);
                 assert!(
                     (values[0] - e0).abs() <= 1e-10,
                     "L {len} total {total:?} J {j}: {} != {e0}",
@@ -278,6 +280,7 @@ fn centre_bond_lanczos_finds_the_ed_ground_energy() {
             }
         }
     }
+    assert!(max_numiter > 1, "no case needed a thick restart");
 }
 
 /// T3. The planar lowering round-trips and refuses a cut that would braid.

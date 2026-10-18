@@ -29,7 +29,7 @@ are checked in as fixtures (CI never runs Julia).
 | S0 | ED oracle, isometric MPS, environments, two-site `H_eff` | done |
 | S1 | `H_eff` checked through symtn's `inner`; entropy | done |
 | S2 | `H_eff` as a krylov `LinearMap`; centre-bond Lanczos equals the ED ground energy (L ≤ 12) | done |
-| S3 | SVD truncation, sweeps, MPSKit fixtures | waits for symtn #2281 leaf C |
+| S3 | SVD truncation, sweeps, MPSKit fixtures | not started (unblocked: #2281 leaf C is in the pinned symtn) |
 | S4 | environments and `H_eff` on symtn's `planar_contract` (no app-side planar helper) | done |
 
 ## Dependencies
