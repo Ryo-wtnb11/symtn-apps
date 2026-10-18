@@ -1,6 +1,7 @@
-//! T8. DMRG against MPSKit 0.13.13's `DMRG2` on the same chain
-//! (`reference/mpskit/golden_chain.jl`, checked-in output; CI never runs
-//! Julia): ground energy, entanglement spectra and entropies per bond.
+//! T8. DMRG against MPSKit 0.13.13's `DMRG2` on the same chain: ground
+//! energy, entanglement spectra and entropies per bond. Only the generator's
+//! output is in git; its header records the versions and the exact MPSKit
+//! calls. CI never runs Julia.
 
 mod common;
 

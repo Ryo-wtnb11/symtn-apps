@@ -113,7 +113,7 @@ pub fn lanczos_ground_energy(chain: &Chain, j: f64) -> f64 {
 
 /// MPSKit 0.13.13 `DMRG2` and `Defaults` values, spelled out (`tol = 1e-10`,
 /// `krylovdim = 30`, eigensolver `maxiter = 200`, `updatetol` floor `1e-14`
-/// and factor `1e-3`), with the fixture generator's two changes:
+/// and factor `1e-3`), with two changes (the first one is shared with the MPSKit fixture):
 /// - the `updatetol` ceiling is 1e-12, not 1e-4: at 1e-4 the second sweep's
 ///   eigensolves return their start vectors unchanged, so `ϵ ≈ 1e-16` stops
 ///   the run ~1e-9 above the ground energy (MPSKit does the same);

@@ -1,1 +1,7 @@
 /target
+
+# The MPSKit fixture generator is kept locally, not in git; only its
+# output (reference/mpskit/fixtures/*.txt, self-describing headers) is committed.
+/reference/mpskit/golden_chain.jl
+/reference/mpskit/Project.toml
+/reference/mpskit/Manifest.toml

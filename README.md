@@ -32,10 +32,18 @@ are checked in as fixtures (CI never runs Julia).
 | `tests/mpskit.rs` | E₀, entanglement spectra and entropies per bond against MPSKit `DMRG2`, L ∈ {12, 16, 20, 24} |
 | `tests/central_charge.rs` (`#[ignore]`) | c from `S(l)` at L = 96: ≈ 0.67 (`J = +1`, TCI 0.7), ≈ 0.78 (`J = -1`, Potts 0.8) |
 
-The MPSKit fixture is regenerated with
-`julia --project=reference/mpskit reference/mpskit/golden_chain.jl` (MPSKit
-0.13.13, TensorKit 0.17.1, TensorKitSectors 0.3.10, pinned by the checked-in
-`Manifest.toml`). The slow fit runs with
+The MPSKit fixture (`reference/mpskit/fixtures/golden_chain.txt`) is the
+only reference artifact in git. Its generator, a Julia script with a pinned
+Project/Manifest, is kept locally and not committed. The fixture header
+records everything needed to trace the values without it:
+- the Julia, MPSKit, TensorKit and TensorKitSectors versions (1.11.6, 0.13.13,
+  0.17.1, 0.3.10);
+- the exact Hamiltonian, initial state and `find_groundstate(…, DMRG2(…))`
+  calls, the cases (L, J, total charge) and D;
+- the one departure from MPSKit's defaults (eigensolver `tol_max = 1e-12`)
+  and why it is needed.
+
+The slow fit runs with
 `cargo test --release --test central_charge -- --ignored --nocapture`, and
 `cargo run --release --example golden_chain` prints a CSV profile.
 
