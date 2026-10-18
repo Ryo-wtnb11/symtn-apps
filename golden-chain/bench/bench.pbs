@@ -1,0 +1,60 @@
+#!/bin/bash
+# PBS job for the DMRG2 comparison on an exclusive node; both sides run in
+# this job, one after the other.
+#
+#     qsub -v BENCH_ROOT=$HOME/symtn-bench,STAGE=first-and-1 golden-chain/bench/bench.pbs
+#     qsub -v BENCH_ROOT=$HOME/symtn-bench,STAGE=threads golden-chain/bench/bench.pbs
+#
+# BENCH_ROOT holds the symtn-apps checkout, the Cargo target, the private
+# Julia depot and results/. Sources are fetched and built on the login node
+# beforehand (cargo fetch; cargo build with OPENBLAS_DYNAMIC_ARCH=1, so the
+# OpenBLAS kernels are picked at run time like Julia's OpenBLAS_jll); the
+# job precompiles Julia packages and the sysimage on the compute node it
+# times on.
+#
+# STAGE first-and-1: first-result rows (1 thread, all cases) and warm rows at
+#   1 thread for L in {24, 48, 96};
+# STAGE threads: warm rows at L = 96 for 2, 4, 8, 16, 32 threads.
+#PBS -N gc-bench
+#PBS -q workq
+#PBS -l select=1:ncpus=96:mem=64gb
+#PBS -l place=excl
+#PBS -l walltime=24:00:00
+#PBS -j oe
+
+set -eu
+root=${BENCH_ROOT:?qsub -v BENCH_ROOT=...}
+stage=${STAGE:?qsub -v STAGE=first-and-1|threads}
+app=$root/symtn-apps/golden-chain
+results=$root/results
+export CARGO_TARGET_DIR=$root/target JULIA_DEPOT_PATH=$root/julia-depot OPENBLAS_DYNAMIC_ARCH=1
+export PATH=$HOME/.cargo/bin:$HOME/.juliaup/bin:$PATH
+mkdir -p "$results"
+
+echo "=== Job ${PBS_JOBID:-local} on $(hostname) ==="
+lscpu | grep -E "Model name|^CPU\(s\)|Socket|Core\(s\) per socket|Thread\(s\) per core|NUMA node\(s\)"
+echo "symtn-apps $(git -C "$app" rev-parse --short HEAD)"
+start=$(date +%s)
+julia --project="$app/bench/mpskit" -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+echo "=== Julia package precompilation on this node: $(( $(date +%s) - start )) s ==="
+
+lens="24 48 96"
+ds="32 64 128 256"
+case $stage in
+first-and-1)
+    image=$("$app/bench/build_sysimage.sh" "$root/sysimage")
+    echo "=== sysimage: $(cat "$image.txt") ==="
+    BENCH_IMAGE=$image stdbuf -oL -eL "$app/bench/run.sh" first-run "$results" 1 "$lens" "$ds"
+    stdbuf -oL -eL "$app/bench/run.sh" warm "$results" 1 "$lens" "$ds"
+    ;;
+threads)
+    for t in 2 4 8 16 32; do
+        stdbuf -oL -eL "$app/bench/run.sh" warm "$results" "$t" 96 "$ds"
+    done
+    ;;
+*)
+    echo "unknown STAGE $stage" >&2
+    exit 2
+    ;;
+esac
+echo "=== done after $(( $(date +%s) - start )) s ==="
