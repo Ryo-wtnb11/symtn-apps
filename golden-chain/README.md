@@ -142,6 +142,31 @@ setup plus the first sweep of the target case:
 - the same process after a one-sweep run of a tiny different case
   (L = 6, D = 8).
 
+### First result
+
+These rows are partial: the cluster job was stopped after the L = 24 cases
+(`bench/results/first-run_t1_*.csv`, whose header marks it). Times are setup
+plus the first sweep at one thread, in seconds:
+
+| L | D | J | symtn, fresh process | symtn, after warm-up | MPSKit, fresh process (JIT) | MPSKit, sysimage | MPSKit, after warm-up |
+|---|---|---|---|---|---|---|---|
+| 24 | 32 | +1 | 0.167 | 0.150 | 63.4 | 1.12 | 0.449 |
+| 24 | 32 | -1 | 0.217 | 0.213 | 64.1 | 1.19 | 0.554 |
+| 24 | 64 | +1 | 0.318 | 0.312 | 63.2 | 1.58 | 1.09 |
+| 24 | 64 | -1 | 0.484 | 0.480 | 63.4 | 1.76 | 0.754 |
+| 24 | 128 | +1 | 0.710 | 0.701 | 63.7 | 2.05 | 1.40 |
+
+- **JIT.** Julia's fresh process spends about 63 s compiling.
+- **Sysimage.** A sysimage of the bench path removes most of that cost.
+  Building it takes 556 s and produces a 625 MB image (PackageCompiler
+  2.4.4). The fresh process is then still 1.1-2.0 s, against 0.17-0.71 s
+  for symtn.
+- **After warm-up.** In a warmed process symtn's first sweep is 2-3×
+  faster than MPSKit's at these small sizes.
+- **No JIT on the Rust side.** symtn's fresh process and its warmed run
+  differ by at most 17 ms. Rust compiles ahead of time, so the only
+  first-run costs are allocator and cache warm-up.
+
 ### Where the time goes
 
 The case is L = 48, D = 128, J = +1, measured on one Xeon Platinum 9242
