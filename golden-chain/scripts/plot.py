@@ -33,7 +33,7 @@ def chord(l, n):
 
 
 def fit(l, s, n):
-    """c and s' per residue of l mod 6 over L/8 <= l <= 7L/8 (as test T9),
+    """c and s' per residue of l mod 6 over L/8 <= l <= 7L/8 (as tests/central_charge.rs),
     c averaged; returns c and the per-residue offsets."""
     cs, offsets = [], {}
     for r in range(6):

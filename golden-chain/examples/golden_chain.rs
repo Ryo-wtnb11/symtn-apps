@@ -18,7 +18,8 @@ use std::path::Path;
 use golden_chain::dmrg::find_groundstate;
 use golden_chain::ed::{Boundary, Chain, Fib};
 
-/// A multiple of 6, as T9 needs for `J = -1` (period-3 Potts structure).
+/// A multiple of 6, as the central-charge fit needs for `J = -1`
+/// (period-3 Potts structure; see `tests/central_charge.rs`).
 const PROFILE_LEN: usize = 96;
 /// Ramp: cheap sweeps first, then the target D.
 const PROFILE_SCHEDULE: [usize; 3] = [32, 64, 128];

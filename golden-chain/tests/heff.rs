@@ -147,7 +147,7 @@ fn max_diff(a: &Tensor, b: &Tensor) -> f64 {
         .fold(0.0, f64::max)
 }
 
-/// T4 at full bond dimension: the isometric MPS spans the whole path space,
+/// At full bond dimension: the isometric MPS spans the whole path space,
 /// so `Ψ(H_eff θ) = H Ψ(θ)` exactly, at every bond, for both couplings and
 /// both total charges.
 #[test]
@@ -172,7 +172,7 @@ fn full_rank_effective_hamiltonian_is_the_ed_hamiltonian() {
     }
 }
 
-/// T4 with truncated bonds: `H_eff` is the Galerkin projection,
+/// With truncated bonds: `H_eff` is the Galerkin projection,
 /// `⟨θ', H_eff θ⟩ = d_total ⟨Ψ(θ'), H Ψ(θ)⟩_ED`. symtn's `inner` weights
 /// each coupled sector by its quantum dimension, and every path of `Ψ` ends
 /// in the coupled sector `x_L = total`, so the isometric embedding scales the
@@ -200,18 +200,18 @@ fn truncated_effective_hamiltonian_is_the_projected_ed_hamiltonian() {
     }
 }
 
-/// The Jacobi oracle on the TensorKit-pinned three-anyon matrix (T1).
+/// The Jacobi oracle on the TensorKit-pinned three-anyon matrix (`tests/ed.rs`).
 #[test]
 fn jacobi_oracle_matches_the_three_anyon_ground_energy() {
     let chain = Chain::new(3, Boundary::Open(Fib::Tau));
     let e0 = common::jacobi_ground(chain.hamiltonian(1.0), chain.dim()).0;
-    // Lowest eigenvalue of -[[a, b], [b, c]] (T1's matrix), by hand.
+    // Lowest eigenvalue of -[[a, b], [b, c]] (the three-anyon matrix of `tests/ed.rs`), by hand.
     let (a, b, c) = (1.0 + phi().powi(-2), phi().powf(-1.5), phi().recip());
     let hand = -((a + c) + ((a - c).powi(2) + 4.0 * b * b).sqrt()) / 2.0;
     assert!((e0 - hand).abs() <= 1e-13, "{e0} != {hand}");
 }
 
-/// T6, exact embedding: with full bond spaces `H_eff` at the centre bond is
+/// Exact embedding: with full bond spaces `H_eff` at the centre bond is
 /// the whole ED Hamiltonian, so `symtn::krylov::eigsolve` on [`Heff`] as a
 /// `LinearMap` returns the Jacobi ED ground energy, for both couplings and
 /// both total charges. No truncation and no SVD are involved.
@@ -249,7 +249,7 @@ fn centre_bond_lanczos_finds_the_ed_ground_energy() {
     assert!(max_numiter > 1, "no case needed a thick restart");
 }
 
-/// T3. The planar lowering round-trips and refuses a cut that would braid.
+/// The planar lowering round-trips and refuses a cut that would braid.
 #[test]
 fn planar_steps_round_trip_and_reject_non_planar_cuts() {
     let s = setup(6, Fib::Tau, 3, 3, 1.0);
@@ -276,7 +276,7 @@ fn planar_steps_round_trip_and_reject_non_planar_cuts() {
     assert!(h.planar_contract(&theta, &cut(&[3, 2], &[1, 3])).is_err());
 }
 
-/// T5. The right term's shortcut: `θ ∘ rot(OR̃) = rot(OR̃ ∘ rot(θ))`, so the
+/// The right term's shortcut: `θ ∘ rot(OR̃) = rot(OR̃ ∘ rot(θ))`, so the
 /// hot path needs no transpose of θ.
 #[test]
 fn rotated_right_operator_acts_from_the_domain() {

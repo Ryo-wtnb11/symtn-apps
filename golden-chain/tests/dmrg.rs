@@ -1,4 +1,4 @@
-//! Two-site DMRG against the symtn-independent fusion-path ED (T7) and the
+//! Two-site DMRG against the symtn-independent fusion-path ED (ground energy) and the
 //! entanglement-spectrum relation between the two.
 
 mod common;
@@ -27,7 +27,7 @@ fn sparse_lanczos_ed_matches_dense_jacobi() {
     }
 }
 
-/// T7. DMRG with a bond dimension ramp reaches the ED ground energy to 1e-9
+/// DMRG with a bond dimension ramp reaches the ED ground energy to 1e-9
 /// for both couplings and both total charges, up to L = 20. At D = 128 the
 /// centre bond of L = 20 (total quantum dimension 34 + 55φ ≈ 123) is kept
 /// whole, so the gate tests the sweep and the eigensolver, not truncation.

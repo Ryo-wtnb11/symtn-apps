@@ -1,4 +1,4 @@
-//! T9 (slow, `#[ignore]`): the central charge from the open-chain
+//! Slow (`#[ignore]`): the central charge from the open-chain
 //! entanglement profile `S(l) = (c/6) ln[(2L/π) sin(πl/L)] + s'`.
 //!
 //! Feiguin et al., PRL 98, 160409 (2007), p. 3: the chain favouring the
