@@ -1,13 +1,16 @@
 # MPSKit DMRG2 timings for the comparison with `examples/bench_dmrg.rs`;
 # `bench/run.sh` drives both and adds the CSV header.
 #
-#     julia --project=golden-chain/bench/mpskit -t <threads> golden-chain/bench/mpskit/bench.jl cold <threads> <L> <D> <J>
-#     julia --project=golden-chain/bench/mpskit -t <threads> golden-chain/bench/mpskit/bench.jl warm <threads> [L...]
+#     julia --project=golden-chain/bench/mpskit -t <threads> golden-chain/bench/mpskit/bench.jl cold|first|warm <threads> <L> <D> <J> [label]
 #
 # Rows as on the Rust side: side,threads,kind,L,D,J,rep,sweep,seconds,
-# eigsolve_s,svd_s,env_s,apply_s,matvecs,energy,epsilon,sweeps,converged, where kind is
+# eigsolve_s,svd_s,env_s,apply_s,matvecs,energy,epsilon,sweeps,converged,
+# reported (the thread settings in effect), where kind is
 # - cold: state construction, environments and the first sweep of the first
-#   run in this process (includes JIT compilation);
+#   run in this process (includes JIT compilation); `cold_sysimage` is the
+#   same with the precompiled image of `sysimage.jl` (`julia --sysimage`);
+# - first_after_compile: the same for the target case after a one-sweep run of
+#   a tiny different case (L = 6, D = 8, same J) in this process;
 # - full: a warm run to convergence at fixed D, wall time from the state
 #   construction to the return of `find_groundstate`;
 # - sweep: one sweep of a warm `find_groundstate` run of exactly FIXED_SWEEPS
@@ -32,15 +35,15 @@ end
 # FiniteMPS caps each bond at its reachable space, as `model::virtual_spaces`.
 virtual_space(D) = Vect[FibonacciAnyon](s => round(Int, D / (1 + dim(FibonacciAnyon(:τ)))) for s in (:I, :τ))
 
-const LENS = (24, 48, 96)
-const DS = (32, 64, 128, 256)
-const JS = (1.0, -1.0)
 const FIXED_SWEEPS = 4
 # As `bench_dmrg.rs`: a first full run beyond LONG_RUN seconds selects the
 # second counts.
 const FULL_REPEATS = (5, 3)
 const FIXED_REPEATS = (3, 1)
 const LONG_RUN = 20.0
+# The warm-up case of `first`, as on the Rust side.
+const WARMUP_LEN = 6
+const WARMUP_D = 8
 
 # `tests/common/mod.rs:mpskit_dmrg2`, every value spelled out.
 function dmrg2(D; tol = 1.0e-10, maxiter = 50, finalize = MPSKit.Defaults._finalize)
@@ -66,7 +69,14 @@ function timed_run(H, L, D; kwargs...)
 end
 
 row(threads, kind, L, D, J, rep, sweep, seconds; eig = "", svd = "", env = "", apply = "", matvecs = "", energy = "", epsilon = "", sweeps = "", converged = "") =
-    (println(join(("MPSKit", threads, kind, L, D, Int(J), rep, sweep, seconds, eig, svd, env, apply, matvecs, energy, epsilon, sweeps, converged), ",")); flush(stdout))
+    (println(join(("MPSKit", threads, kind, L, D, Int(J), rep, sweep, seconds, eig, svd, env, apply, matvecs, energy, epsilon, sweeps, converged, reported()), ",")); flush(stdout))
+
+# The thread settings in effect, for the `reported` column.
+reported() = join((
+    "nthreads=$(Threads.nthreads())", "blas=$(BLAS.get_num_threads())",
+    "mpskit_scheduler=$(nameof(typeof(MPSKit.Defaults.scheduler[])))",
+    "tensorkit_blockscheduler=$(nameof(typeof(TensorKit.blockscheduler[])))",
+), "; ")
 
 energy(ψ, H, envs) = real(expectation_value(ψ, H, envs))
 
@@ -150,25 +160,35 @@ function profiled_dmrg2(threads, H, L, D, J)
 end
 
 function main(args)
-    usage = "usage: bench.jl cold <threads> <L> <D> <J> | warm <threads> [L...]"
-    length(args) >= 2 || error(usage)
+    usage = "usage: bench.jl cold <threads> <L> <D> <J> [label] | first|warm <threads> <L> <D> <J>"
+    length(args) >= 5 || error(usage)
     threads = parse(Int, args[2])
     Threads.nthreads() == threads || error("start julia with -t $threads")
+    # Threading knobs: julia -t, the BLAS pool, and MPSKit's default scheduler
+    # (`Defaults.scheduler`: Serial for one thread, Dynamic otherwise);
+    # TensorKit's `blockscheduler` stays at its default, SerialScheduler.
     BLAS.set_num_threads(threads)
-    if args[1] == "cold"
+    if args[1] in ("cold", "first")
         L, D, J = parse(Int, args[3]), parse(Int, args[4]), parse(Float64, args[5])
+        kind = if args[1] == "first"
+            # A different, tiny case first: compiles the code path, caches
+            # nothing of the target's spaces.
+            timed_run(golden_chain(WARMUP_LEN, J), WARMUP_LEN, WARMUP_D; maxiter = 1)
+            "first_after_compile"
+        else
+            # `cold_sysimage` when started with the image of sysimage.jl.
+            get(args, 6, "cold")
+        end
         H = golden_chain(L, J)
         _, _, ϵ, _, stamps = timed_run(H, L, D; maxiter = 1)
-        row(threads, "cold", L, D, J, 0, 1, stamps[1]; epsilon = ϵ)
+        row(threads, kind, L, D, J, 0, 1, stamps[1]; epsilon = ϵ)
     elseif args[1] == "warm"
-        lens = length(args) > 2 ? parse.(Int, args[3:end]) : LENS
-        for L in lens, D in DS, J in JS
-            warm(threads, L, D, J)
-        end
+        warm(threads, parse(Int, args[3]), parse(Int, args[4]), parse(Float64, args[5]))
     else
         error(usage)
     end
     return nothing
 end
 
-main(ARGS)
+# `precompile.jl` includes this file for its definitions only.
+abspath(PROGRAM_FILE) == (@__FILE__) && main(ARGS)

@@ -2,14 +2,17 @@
 //! writes the same rows); `bench/run.sh` drives both and adds the header.
 //!
 //! ```sh
-//! cargo run --release --example bench_dmrg -- cold <threads> <L> <D> <J>
-//! cargo run --release --example bench_dmrg -- warm <threads>
+//! cargo run --release --example bench_dmrg -- cold|first|warm <threads> <L> <D> <J>
 //! ```
 //!
 //! Rows (CSV, no header): `side,threads,kind,L,D,J,rep,sweep,seconds,
-//! eigsolve_s,svd_s,env_s,apply_s,matvecs,energy,epsilon,sweeps,converged`, where
+//! eigsolve_s,svd_s,env_s,apply_s,matvecs,energy,epsilon,sweeps,converged,
+//! reported` (the thread settings in effect), where
 //! `kind` is
-//! - `cold`: setup plus the first sweep of the first run in this process;
+//! - `cold`: setup plus the first sweep of the first run in this process
+//!   (Rust has no JIT, so a fresh process is the compiled steady code);
+//! - `first_after_compile`: the same for the target case after a one-sweep
+//!   run of a tiny different case (L = 6, D = 8, same J) in the process;
 //! - `full`: a warm run to convergence at fixed D, wall time of the call;
 //! - `sweep`: one sweep of a warm run of exactly [`FIXED_SWEEPS`] sweeps
 //!   (sweep 1 includes the setup).
@@ -17,15 +20,14 @@
 #[path = "../tests/common/mod.rs"]
 mod common;
 
+use std::ffi::c_int;
+use std::sync::OnceLock;
 use std::time::Instant;
 
 use golden_chain::dmrg::{Dmrg2, SweepLog, find_groundstate};
 use golden_chain::ed::Fib;
 use symtn::typed::Runtime;
 
-const LENS: [usize; 3] = [24, 48, 96];
-const DS: [usize; 4] = [32, 64, 128, 256];
-const JS: [f64; 2] = [1.0, -1.0];
 /// Sweep count of the per-sweep runs, equal on both sides.
 const FIXED_SWEEPS: usize = 4;
 /// Warm repetitions of the full and the fixed-sweep runs; a first full run
@@ -34,23 +36,61 @@ const FIXED_SWEEPS: usize = 4;
 const FULL_REPEATS: [usize; 2] = [5, 3];
 const FIXED_REPEATS: [usize; 2] = [3, 1];
 const LONG_RUN: f64 = 20.0;
+/// The warm-up case of `first`, as on the MPSKit side.
+const WARMUP_LEN: usize = 6;
+const WARMUP_D: usize = 8;
+
+unsafe extern "C" {
+    /// OpenBLAS's own thread count (libopenblas, linked by openblas-src).
+    fn openblas_get_num_threads() -> c_int;
+}
+
+/// The thread settings in effect, for the `reported` column. symtn's
+/// `Runtime` has no accessor for its pool sizes, so those are the requested
+/// values; OpenBLAS reports its own.
+static REPORTED: OnceLock<String> = OnceLock::new();
+
+fn reported() -> &'static str {
+    REPORTED.get().map_or("", String::as_str)
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let usage = "usage: bench_dmrg cold <threads> <L> <D> <J> | warm <threads> [L...]";
-    let threads: usize = args.get(1).ok_or(usage)?.parse()?;
-    let rt = Runtime::builder().dense_threads(threads).build()?;
+    let usage = "usage: bench_dmrg cold|first|warm <threads> <L> <D> <J>";
+    let [threads, len, d, j] = [1, 2, 3, 4].map(|k| args.get(k).ok_or(usage));
+    let (threads, len, d, j): (usize, usize, usize, f64) =
+        (threads?.parse()?, len?.parse()?, d?.parse()?, j?.parse()?);
+    // Every thread knob symtn has: the runtime CPU pool (dense kernels,
+    // tree-transform replay, strided kernels) and the recoupling workers.
+    // BLAS threads are OpenBLAS's own (`OPENBLAS_NUM_THREADS`, set by run.sh).
+    let rt = Runtime::builder()
+        .dense_threads(threads)
+        .recoupling_threads(threads)
+        .build()?;
+    // SAFETY: a getter without arguments; libopenblas is initialized when
+    // loaded, and the call only reads its thread count.
+    let blas = unsafe { openblas_get_num_threads() };
+    REPORTED.get_or_init(|| {
+        format!("dense_threads={threads} (requested); recoupling_threads={threads} (requested); openblas_get_num_threads={blas}")
+    });
     match args[0].as_str() {
-        "cold" => {
-            let [len, d, j] = [2, 3, 4].map(|k| args.get(k).ok_or(usage));
-            let (len, d, j): (usize, usize, f64) = (len?.parse()?, d?.parse()?, j?.parse()?);
-            let mut alg = common::mpskit_dmrg2(vec![d]);
-            alg.maxiter = 1;
-            let gs = find_groundstate(&rt, len, j, Fib::One, &alg)?;
+        "cold" | "first" => {
+            let one_sweep = |d| Dmrg2 {
+                maxiter: 1,
+                ..common::mpskit_dmrg2(vec![d])
+            };
+            let kind = if args[0] == "first" {
+                // A different, tiny case first: the target's spaces are new.
+                find_groundstate(&rt, WARMUP_LEN, j, Fib::One, &one_sweep(WARMUP_D))?;
+                "first_after_compile"
+            } else {
+                "cold"
+            };
+            let gs = find_groundstate(&rt, len, j, Fib::One, &one_sweep(d))?;
             let s = &gs.sweeps[0];
             row(
                 threads,
-                "cold",
+                kind,
                 len,
                 d,
                 j,
@@ -60,19 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 s,
             );
         }
-        "warm" => {
-            let lens: Vec<usize> = match &args[2..] {
-                [] => LENS.to_vec(),
-                some => some.iter().map(|l| l.parse()).collect::<Result<_, _>>()?,
-            };
-            for len in lens {
-                for d in DS {
-                    for j in JS {
-                        warm(&rt, threads, len, d, j)?;
-                    }
-                }
-            }
-        }
+        "warm" => warm(&rt, threads, len, d, j)?,
         _ => return Err(usage.into()),
     }
     Ok(())
@@ -113,12 +141,13 @@ fn warm(
             long = 1;
         }
         println!(
-            "symtn,{threads},full,{len},{d},{j},{rep},,{seconds:.6e},,,,,{},{:.15e},{:.3e},{},{}",
+            "symtn,{threads},full,{len},{d},{j},{rep},,{seconds:.6e},,,,,{},{:.15e},{:.3e},{},{},{}",
             gs.sweeps.iter().map(|s| s.matvecs).sum::<usize>(),
             gs.energy,
             gs.sweeps.last().map_or(f64::NAN, |s| s.epsilon),
             gs.sweeps.len(),
-            gs.converged
+            gs.converged,
+            reported()
         );
         rep += 1;
     }
@@ -147,13 +176,14 @@ fn row(
     s: &SweepLog,
 ) {
     println!(
-        "symtn,{threads},{kind},{len},{d},{j},{rep},{sweep},{seconds:.6e},{:.6e},{:.6e},{:.6e},{:.6e},{},{:.15e},{:.3e},,",
+        "symtn,{threads},{kind},{len},{d},{j},{rep},{sweep},{seconds:.6e},{:.6e},{:.6e},{:.6e},{:.6e},{},{:.15e},{:.3e},,,{}",
         s.eigsolve_seconds,
         s.svd_seconds,
         s.environment_seconds,
         s.apply_seconds,
         s.matvecs,
         s.energy,
-        s.epsilon
+        s.epsilon,
+        reported()
     );
 }
