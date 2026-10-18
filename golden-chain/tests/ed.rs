@@ -21,7 +21,7 @@ fn assert_close(a: &[f64], b: &[f64], what: &str) {
     }
 }
 
-/// T1. Open L = 3, total τ: the two paths (1,τ,1,τ), (1,τ,τ,τ) give
+/// Open L = 3, total τ: the two paths (1,τ,1,τ), (1,τ,τ,τ) give
 /// H = -(P_12 + P_23), the matrix symtn pins against TensorKit 0.17
 /// (`symtn/tests/table_planar_workflow.rs`,
 /// `fibonacci_public_planar_workflow_matches_tensorkit`).
@@ -44,7 +44,7 @@ fn three_anyons_match_the_tensorkit_golden_chain_matrix() {
     assert_close(&chain.hamiltonian(1.0), &tensorkit, "H");
 }
 
-/// T2. Path counts are Fibonacci (open) and Lucas (periodic) numbers.
+/// Path counts are Fibonacci (open) and Lucas (periodic) numbers.
 #[test]
 fn dimensions_are_fibonacci_and_lucas_numbers() {
     let fib = |n: usize| (0..n).fold((0usize, 1usize), |(a, b), _| (b, a + b)).0;
@@ -61,7 +61,7 @@ fn dimensions_are_fibonacci_and_lucas_numbers() {
     }
 }
 
-/// T2. `e_i = φ P_i` generate Temperley–Lieb with loop value φ:
+/// `e_i = φ P_i` generate Temperley–Lieb with loop value φ:
 /// `P² = P`, `P_i P_{i±1} P_i = φ⁻² P_i`, distant projectors commute, and
 /// each is symmetric. This pins every F entry up to the basis gauge.
 #[test]

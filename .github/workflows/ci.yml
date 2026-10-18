@@ -30,4 +30,6 @@ jobs:
           restore-keys: cargo-fp-${{ runner.os }}-${{ steps.toolchain.outputs.cachekey }}-
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --workspace --locked
+      # Release: the DMRG tests take seconds optimized and minutes in a debug
+      # build.
+      - run: cargo test --workspace --locked --release

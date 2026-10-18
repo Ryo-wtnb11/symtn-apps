@@ -1,1 +1,4 @@
 /target
+
+# CSV written by `cargo run --example golden_chain`.
+/golden-chain/out/

@@ -5,32 +5,9 @@ symmetric tensor library. Applications live here, not in symtn: symtn owns
 general categorical tensor operations, and models, algorithms such as DMRG,
 and their physics validation belong to the applications that use them.
 
-## Crates
+## Applications
 
-| Crate | What |
-| --- | --- |
-| [`golden-chain`](golden-chain) | Two-site DMRG for the Fibonacci golden chain on anyonic (`TableRule::fibonacci()`) tensors |
-
-## Golden chain
-
-`L` Fibonacci anyons with `H = -J sum_i P^(1)_{i,i+1}`, the projector onto the
-trivial fusion channel of neighbouring anyons. `J = +1` is critical with the
-tricritical Ising CFT (`c = 7/10`), `J = -1` with the 3-state Potts CFT
-(`c = 4/5`).
-
-Validation does not trust the tensors under test: an exact diagonalization in
-the fusion-path basis is written independently of symtn, and MPSKit results
-are checked in as fixtures (CI never runs Julia).
-
-### Stages
-
-| Stage | Content | Status |
-| --- | --- | --- |
-| S0 | ED oracle, isometric MPS, environments, two-site `H_eff` | done |
-| S1 | `H_eff` checked through symtn's `inner`; entropy | done |
-| S2 | `H_eff` as a krylov `LinearMap`; centre-bond Lanczos equals the ED ground energy (L ≤ 12) | done |
-| S3 | SVD truncation, sweeps, MPSKit fixtures | not started (unblocked: #2281 leaf C is in the pinned symtn) |
-| S4 | environments and `H_eff` on symtn's `planar_contract` (no app-side planar helper) | done |
+- [`golden-chain`](golden-chain/README.md): two-site DMRG for the Fibonacci golden chain on anyonic (`TableRule::fibonacci()`) tensors, validated against an independent exact diagonalization.
 
 ## Dependencies
 
@@ -48,12 +25,12 @@ symtn's `TensorMap` impl. krylov declares LAPACK; symtn's `blas-openblas`
 links OpenBLAS, built from source by `openblas-src` (no system library is
 needed, the first build takes several minutes).
 
-## References
+## CI
 
-- A. Feiguin, S. Trebst, A. W. W. Ludwig, M. Troyer, A. Kitaev, Z. Wang,
-  M. H. Freedman, "Interacting anyons in topological quantum liquids: the
-  golden chain", Phys. Rev. Lett. 98, 160409 (2007).
-- TensorKit.jl 0.17.1 and MPSKit.jl 0.13.13 (reference implementations).
+One job on `ubuntu-latest` runs `cargo fmt --check`,
+`cargo clippy --all-targets -D warnings` and `cargo test --release`. The DMRG
+tests take about 10 s optimized and minutes in a debug build. Slow physics
+runs are `#[ignore]` tests or examples, not CI gates.
 
 ## License
 
