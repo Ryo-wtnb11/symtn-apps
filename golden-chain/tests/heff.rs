@@ -14,6 +14,8 @@ use symtn::krylov::{self, Lanczos, Which, Workspace};
 use symtn::sector::TableRule;
 use symtn::typed::{ContractSpec, Runtime, TensorMap};
 
+mod common;
+
 const TOL: f64 = 1e-12;
 
 /// An isometric MPS around bond `(pos, pos+1)` with the environments of `H`.
@@ -198,47 +200,11 @@ fn truncated_effective_hamiltonian_is_the_projected_ed_hamiltonian() {
     }
 }
 
-/// Lowest eigenvalue of a dense row-major real symmetric matrix by cyclic
-/// Jacobi rotations; symtn- and krylov-independent.
-fn jacobi_lowest(mut a: Vec<f64>, n: usize) -> f64 {
-    for _ in 0..100 {
-        let off: f64 = (0..n)
-            .flat_map(|i| (0..n).filter(move |&j| j != i).map(move |j| (i, j)))
-            .map(|(i, j)| a[i * n + j].powi(2))
-            .sum();
-        if off < 1e-30 {
-            break;
-        }
-        for p in 0..n {
-            for q in p + 1..n {
-                if a[p * n + q].abs() < 1e-300 {
-                    continue;
-                }
-                let tau = (a[q * n + q] - a[p * n + p]) / (2.0 * a[p * n + q]);
-                let t = tau.signum() / (tau.abs() + (1.0 + tau * tau).sqrt());
-                let t = if tau == 0.0 { 1.0 } else { t };
-                let (c, sn) = (1.0 / (1.0 + t * t).sqrt(), t / (1.0 + t * t).sqrt());
-                for k in 0..n {
-                    let (akp, akq) = (a[k * n + p], a[k * n + q]);
-                    a[k * n + p] = c * akp - sn * akq;
-                    a[k * n + q] = sn * akp + c * akq;
-                }
-                for k in 0..n {
-                    let (apk, aqk) = (a[p * n + k], a[q * n + k]);
-                    a[p * n + k] = c * apk - sn * aqk;
-                    a[q * n + k] = sn * apk + c * aqk;
-                }
-            }
-        }
-    }
-    (0..n).map(|i| a[i * n + i]).fold(f64::INFINITY, f64::min)
-}
-
 /// The Jacobi oracle on the TensorKit-pinned three-anyon matrix (T1).
 #[test]
 fn jacobi_oracle_matches_the_three_anyon_ground_energy() {
     let chain = Chain::new(3, Boundary::Open(Fib::Tau));
-    let e0 = jacobi_lowest(chain.hamiltonian(1.0), chain.dim());
+    let e0 = common::jacobi_ground(chain.hamiltonian(1.0), chain.dim()).0;
     // Lowest eigenvalue of -[[a, b], [b, c]] (T1's matrix), by hand.
     let (a, b, c) = (1.0 + phi().powi(-2), phi().powf(-1.5), phi().recip());
     let hand = -((a + c) + ((a - c).powi(2) + 4.0 * b * b).sqrt()) / 2.0;
@@ -258,7 +224,7 @@ fn centre_bond_lanczos_finds_the_ed_ground_energy() {
         for total in [Fib::One, Fib::Tau] {
             for j in [1.0, -1.0] {
                 let chain = Chain::new(len, Boundary::Open(total));
-                let e0 = jacobi_lowest(chain.hamiltonian(j), chain.dim());
+                let e0 = common::jacobi_ground(chain.hamiltonian(j), chain.dim()).0;
                 let rule = Arc::new(TableRule::fibonacci());
                 let v = exact_spaces(&rule, len, total, pos);
                 let mut s = setup_with(rule, v, total, pos, j);

@@ -80,10 +80,16 @@ pub fn left_operator(
     let id_p = TensorMap::isomorphism(rt, [p], [p])?;
     let mut ol = TensorMap::zeros(rt, [v0, p], [v0, p])?;
     for a in al {
-        let hl = a.adjoint()?.compose(&ol.compose(a)?)?;
-        ol = hl.otimes(&id_p)?.axpby(ONE, &left_bond(h, a)?, ONE)?;
+        ol = left_step(&ol, a, h, &id_p)?;
     }
     Ok(ol)
+}
+
+/// `OL_{i+1} = HL_i ⊗ id_P + EL_{i+1}` with `HL_i = AL_i† ∘ OL_i ∘ AL_i`
+/// (MPSKit `transfer_left`), for `a = AL_i`.
+pub fn left_step(ol: &Tensor, a: &Tensor, h: &Tensor, id_p: &Tensor) -> Result<Tensor, Error> {
+    let hl = a.adjoint()?.compose(&ol.compose(a)?)?;
+    hl.otimes(id_p)?.axpby(ONE, &left_bond(h, a)?, ONE)
 }
 
 /// `OR̃_{pos+1} ∈ [P, V_{pos+1}*] <- [P, V_{pos+1}*]` (rotated layout) from
@@ -99,11 +105,17 @@ pub fn right_operator(
     let vl_dual = vl.try_dual()?;
     let mut or = TensorMap::zeros(rt, [p, &vl_dual], [p, &vl_dual])?;
     for bk in b.iter().rev() {
-        let bt = bk.transpose(&[2, 1], &[0])?; // [P, V_k*] <- [V_{k-1}*]
-        let hr = bt.adjoint()?.compose(&or.compose(&bt)?)?;
-        or = id_p.otimes(&hr)?.axpby(ONE, &right_bond(h, &bt)?, ONE)?;
+        or = right_step(&or, bk, h, &id_p)?;
     }
     Ok(or)
+}
+
+/// `OR̃_{k-1} = id_P ⊗ HR̃_{k-1} + ER̃_{k-1}` with `HR̃_{k-1} = B̃_k† ∘ OR̃_k ∘ B̃_k`,
+/// for `b = B_k`.
+pub fn right_step(or: &Tensor, b: &Tensor, h: &Tensor, id_p: &Tensor) -> Result<Tensor, Error> {
+    let bt = b.transpose(&[2, 1], &[0])?; // [P, V_k*] <- [V_{k-1}*]
+    let hr = bt.adjoint()?.compose(&or.compose(&bt)?)?;
+    id_p.otimes(&hr)?.axpby(ONE, &right_bond(h, &bt)?, ONE)
 }
 
 /// `X ∘ Y` for rank-4 `X`, `Y` with two codomain legs, as a planar

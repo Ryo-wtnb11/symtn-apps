@@ -113,35 +113,54 @@ impl Chain {
     /// `x_i ∈ (1, τ)`; `(1, 1)` forces the trivial channel, and a single
     /// neighbouring `1` forces `τ`.
     pub fn projector(&self, bond: usize) -> Vec<f64> {
-        assert!((1..=self.bonds()).contains(&bond));
         let n = self.dim();
-        let phi = phi();
         let mut m = vec![0.0; n * n];
-        for (col, path) in self.paths.iter().enumerate() {
-            let at = |k: usize| match self.boundary {
-                Boundary::Open(_) => k,
-                Boundary::Periodic => k % self.len,
-            };
-            let (a, x, b) = (path[at(bond - 1)], path[at(bond)], path[at(bond + 1)]);
-            match (a, b) {
-                (Fib::One, Fib::One) => m[col * n + col] = 1.0,
-                (Fib::Tau, Fib::Tau) => {
-                    let p = |x: Fib, y: Fib| match (x, y) {
-                        (Fib::One, Fib::One) => phi.powi(-2),
-                        (Fib::Tau, Fib::Tau) => phi.recip(),
-                        _ => phi.powf(-1.5),
-                    };
-                    for y in [Fib::One, Fib::Tau] {
-                        let mut target = path.clone();
-                        target[at(bond)] = y;
-                        let row = self.index(&target).expect("τ τ neighbours admit both");
-                        m[row * n + col] = p(y, x);
-                    }
-                }
-                _ => {}
-            }
+        for col in 0..n {
+            self.projector_column(bond, col, |row, value| m[row * n + col] = value);
         }
         m
+    }
+
+    /// The nonzero entries `(row, value)` of column `col` of `P^(1)` on `bond`.
+    fn projector_column(&self, bond: usize, col: usize, mut entry: impl FnMut(usize, f64)) {
+        assert!((1..=self.bonds()).contains(&bond));
+        let phi = phi();
+        let path = &self.paths[col];
+        let at = |k: usize| match self.boundary {
+            Boundary::Open(_) => k,
+            Boundary::Periodic => k % self.len,
+        };
+        let (a, x, b) = (path[at(bond - 1)], path[at(bond)], path[at(bond + 1)]);
+        match (a, b) {
+            (Fib::One, Fib::One) => entry(col, 1.0),
+            (Fib::Tau, Fib::Tau) => {
+                let p = |x: Fib, y: Fib| match (x, y) {
+                    (Fib::One, Fib::One) => phi.powi(-2),
+                    (Fib::Tau, Fib::Tau) => phi.recip(),
+                    _ => phi.powf(-1.5),
+                };
+                for y in [Fib::One, Fib::Tau] {
+                    let mut target = path.clone();
+                    target[at(bond)] = y;
+                    let row = self.index(&target).expect("τ τ neighbours admit both");
+                    entry(row, p(y, x));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// `y = H x` for `H = -J Σ_bonds P^(1)` without forming `H`: at most two
+    /// entries per path and bond, for chains too long for a dense matrix.
+    pub fn apply_hamiltonian(&self, j: f64, x: &[f64], y: &mut [f64]) {
+        assert_eq!(x.len(), self.dim());
+        assert_eq!(y.len(), self.dim());
+        y.fill(0.0);
+        for bond in 1..=self.bonds() {
+            for (col, &xc) in x.iter().enumerate() {
+                self.projector_column(bond, col, |row, value| y[row] -= j * value * xc);
+            }
+        }
     }
 
     /// Dense row-major `H = -J Σ_bonds P^(1)`.
