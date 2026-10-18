@@ -102,7 +102,7 @@ residue of `l mod 6` (the open chain alternates with bond parity, and the
 
 **Convergence.** The plot shows `|ΔE|` between sweeps and the largest
 truncation error in each sweep, `√(Σ_c d_c Σ σ²)` over the discarded
-Schmidt values,, for the D ramp 32 → 64 → 128 at L = 96.
+Schmidt values, for the D ramp 32 → 64 → 128 at L = 96.
 Both runs stop after three sweeps at `max ϵ ≤ 1e-10`.
 
 ![Per-sweep |ΔE| and truncation error](docs/figures/convergence.png)
