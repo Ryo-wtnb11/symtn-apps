@@ -87,7 +87,7 @@ def summarize(data):
                 matvecs=mean("matvecs"), eigsolve_s=mean("eigsolve_s"), apply_s=mean("apply_s"),
                 svd_s=mean("svd_s"), env_s=mean("env_s"),
                 cpu_percent=cpu, threads_unused=bool(k[1] > 1 and cpu < 50 * k[1]),
-                reported=g["full"][0]["reported"],
+                reported=g["full"][0]["reported"], binding=g["full"][0].get("binding", ""),
             )
         out[k] = s
     return out

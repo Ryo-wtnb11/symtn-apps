@@ -33,7 +33,11 @@ export PATH=$HOME/.cargo/bin:$HOME/.juliaup/bin:$PATH
 mkdir -p "$results"
 
 echo "=== Job ${PBS_JOBID:-local} on $(hostname) ==="
-lscpu | grep -E "Model name|^CPU\(s\)|Socket|Core\(s\) per socket|Thread\(s\) per core|NUMA node\(s\)"
+lscpu | grep -E "Model name|^CPU\(s\)|Socket|Core\(s\) per socket|Thread\(s\) per core|NUMA node"
+# The same binding on both sides: each process on as few NUMA nodes as hold
+# its threads (one node of 24 cores up to 24 threads, nodes 0-1 of socket 0
+# for 32), cpus and memory.
+export BENCH_BIND=1
 echo "symtn-apps $(git -C "$app" rev-parse --short HEAD)"
 start=$(date +%s)
 julia --project="$app/bench/mpskit" -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'

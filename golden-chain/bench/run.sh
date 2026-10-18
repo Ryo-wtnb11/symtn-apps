@@ -15,7 +15,9 @@
 # Writes <out dir>/<mode>_t<threads>_L<L...>_D<D...>.csv with a header that
 # records machine, versions, thread settings and the image build time.
 # Environment: JULIA (default `julia`), BENCH_IMAGE (optional sysimage),
-# BENCH_WAIT_IDLE=1 to wait before every measurement until no other cargo,
+# BENCH_BIND=1 to bind each process with numactl to as few NUMA nodes as
+# hold `threads` cores (cpus and memory, nodes 0, 1, ... in order), with
+# OMP_PROC_BIND=close and OMP_PLACES=cores; BENCH_WAIT_IDLE=1 to wait before every measurement until no other cargo,
 # rustc or julia process runs and the 1-minute load is below 4 (for a shared
 # workstation; a batch node is exclusive).
 set -eu
@@ -64,11 +66,23 @@ measure() {
         "$@" >"$rows"
         cpu="" rss=""
     fi
-    sed "s/\$/,$cpu,$rss/" "$rows" >>"$out"
+    sed "s/\$/,$cpu,$rss,$(echo "$binding" | tr , +)/" "$rows" >>"$out"
     rm -f "$rows"
 }
-rust() { measure "$target/release/examples/bench_dmrg" "$@"; }
-mpskit() { measure "$julia" --project="$app/bench/mpskit" -t "$threads" "$app/bench/mpskit/bench.jl" "$@"; }
+binding="none"
+bind=""
+if [ "${BENCH_BIND:-0}" = 1 ]; then
+    per_node=$(( $(lscpu -p=cpu,node | grep -v '^#' | awk -F, '$2 == 0' | wc -l) ))
+    last=$(( (threads + per_node - 1) / per_node - 1 ))
+    nodes=$(seq -s, 0 "$last")
+    bind="numactl --cpunodebind=$nodes --membind=$nodes"
+    binding="numactl --cpunodebind=$nodes --membind=$nodes ($(( last + 1 )) NUMA node(s) of $per_node cores; OMP_PROC_BIND=close OMP_PLACES=cores)"
+    export OMP_PROC_BIND=close OMP_PLACES=cores
+    echo "=== binding for $threads threads: $binding ===" >&2
+    $bind numactl --show >&2
+fi
+rust() { measure $bind "$target/release/examples/bench_dmrg" "$@"; }
+mpskit() { measure $bind "$julia" --project="$app/bench/mpskit" -t "$threads" "$app/bench/mpskit/bench.jl" "$@"; }
 
 if [ "$(uname)" = Darwin ]; then
     machine="$(sysctl -n machdep.cpu.brand_string), $(sysctl -n hw.physicalcpu) cores ($(sysctl -n hw.perflevel0.physicalcpu) performance + $(sysctl -n hw.perflevel1.physicalcpu) efficiency), $(sysctl -n hw.memsize | awk '{print $1 / 2^30}') GiB, macOS $(sw_vers -productVersion)"
@@ -87,7 +101,8 @@ fi
     echo "# machine: $machine"
     echo "# symtn: $(rustc --version), symtn-apps $(git -C "$app" rev-parse --short HEAD), symtn $(grep -o 'rev = "[0-9a-f]*"' "$app/../Cargo.toml" | cut -c8-14), ${openblas:-OpenBLAS (openblas-src)} built from source by openblas-src, for GEMM and LAPACK"
     echo "# symtn threads: Runtime::builder().dense_threads($threads).recoupling_threads($threads), OPENBLAS_NUM_THREADS=OMP_NUM_THREADS=RAYON_NUM_THREADS=$threads"
-    echo "# columns: reported = thread settings in effect as each process reports them; cpu_percent, max_rss_kb = GNU /usr/bin/time -v of that whole process (warm-up and every row it printed)"
+    echo "# binding: $binding"
+    echo "# columns: binding = the numactl binding of each process; reported = thread settings in effect as each process reports them; cpu_percent, max_rss_kb = GNU /usr/bin/time -v of that whole process (warm-up and every row it printed)"
     echo "# MPSKit: julia $("$julia" --version | awk '{print $3}'), MPSKit 0.13.13, TensorKit 0.17.1, TensorKitSectors 0.3.10, KrylovKit $(grep -A6 '^\[\[deps.KrylovKit\]\]' "$app/bench/mpskit/Manifest.toml" | awk -F'"' '/^version/{print $2}'), $("$julia" -e 'using LinearAlgebra; print(BLAS.get_config().loaded_libs[1].libname |> basename)') (Julia's OpenBLAS_jll)"
     echo "# MPSKit threads: julia -t $threads, BLAS.set_num_threads($threads), MPSKit Defaults.scheduler default (Serial at 1 thread, Dynamic otherwise), TensorKit blockscheduler default (SerialScheduler)"
     echo "# settings (both sides): D = truncrank(D) on the total quantum dimension; tol 1e-10, maxiter 50; Lanczos krylovdim 30, maxiter 200, eager; updatetol clamp(eps*1e-3/sqrt(sweep), 1e-14, 1e-12); initial virtual spaces D/(1+phi) per sector capped at the reachable space"
@@ -97,7 +112,7 @@ fi
     else
         echo "# kinds: full = warm run to convergence; sweep = one sweep of a warm run of exactly 4 sweeps (sweep 1 includes setup); profile = MPSKit's DMRG2 loop copied with timers (split and matvecs only)"
     fi
-    echo "side,threads,kind,L,D,J,rep,sweep,seconds,eigsolve_s,svd_s,env_s,apply_s,matvecs,energy,epsilon,sweeps,converged,reported,cpu_percent,max_rss_kb"
+    echo "side,threads,kind,L,D,J,rep,sweep,seconds,eigsolve_s,svd_s,env_s,apply_s,matvecs,energy,epsilon,sweeps,converged,reported,cpu_percent,max_rss_kb,binding"
 } >"$out"
 : >"$out.time.log"
 
@@ -110,7 +125,7 @@ for len in $lens; do
                 wait_idle; mpskit cold "$threads" "$len" "$d" "$j"
                 if [ -n "${BENCH_IMAGE:-}" ]; then
                     wait_idle
-                    measure "$julia" --sysimage="$BENCH_IMAGE" --project="$app/bench/mpskit" -t "$threads" \
+                    measure $bind "$julia" --sysimage="$BENCH_IMAGE" --project="$app/bench/mpskit" -t "$threads" \
                         "$app/bench/mpskit/bench.jl" cold "$threads" "$len" "$d" "$j" cold_sysimage
                 fi
                 wait_idle; mpskit first "$threads" "$len" "$d" "$j"
