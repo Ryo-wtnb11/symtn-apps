@@ -22,6 +22,16 @@ Validation does not trust the tensors under test: an exact diagonalization in
 the fusion-path basis is written independently of symtn, and MPSKit results
 are checked in as fixtures (CI never runs Julia).
 
+### Stages
+
+| Stage | Content | Status |
+| --- | --- | --- |
+| S0 | ED oracle, isometric MPS, environments, two-site `H_eff` | done |
+| S1 | `H_eff` checked through symtn's `inner`; entropy | done |
+| S2 | `H_eff` as a krylov `LinearMap`; centre-bond Lanczos equals the ED ground energy (L ≤ 12) | done |
+| S3 | SVD truncation, sweeps, MPSKit fixtures | not started (unblocked: #2281 leaf C is in the pinned symtn) |
+| S4 | environments and `H_eff` on symtn's `planar_contract` (no app-side planar helper) | done |
+
 ## Dependencies
 
 symtn is a git dependency pinned by revision; `Cargo.lock` is committed and
@@ -29,8 +39,8 @@ CI builds with `--locked`.
 
 | Dependency | Pin | Features |
 | --- | --- | --- |
-| symtn | [`54c3d16`](https://github.com/Ryo-wtnb11/symtn-rs/commit/54c3d162e4e751122ad7f35e537b3f8d3ea45ddc) | `krylov`, `blas-openblas` (no default `cpu-faer`) |
-| krylov | via symtn's re-export `symtn::krylov` (krylov 0.1 from crates.io) | — |
+| symtn | [`2b7c4ef`](https://github.com/Ryo-wtnb11/symtn-rs/commit/2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb) | `krylov`, `blas-openblas` (no default `cpu-faer`) |
+| krylov | via symtn's re-export `symtn::krylov` (krylov 0.2 from crates.io) | — |
 
 The Lanczos eigensolver is reached only through `symtn::krylov`, so the app
 can never resolve a second krylov whose `Vector` trait would not unify with

@@ -4,4 +4,3 @@
 pub mod ed;
 pub mod model;
 pub mod mps;
-pub mod planar;

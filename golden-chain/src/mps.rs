@@ -13,11 +13,11 @@
 //! block Hamiltonian `HL` and the open bond `EL`, pre-summed into
 //! `OL = HL ⊗ id_P + EL` (MPSKit's prepared `GL_O`). Mirrored on the right.
 
-use symtn::typed::{Error, Runtime, TensorMap};
+use symtn::krylov::LinearMap;
+use symtn::typed::{ContractSpec, Error, Runtime, TensorMap};
 
 use crate::ed::Fib;
 use crate::model::{ONE, Space, Tensor, ZERO, label};
-use crate::planar;
 
 /// `AL ∈ [v_prev, p] <- [v]`, the canonical (partial-identity) isometry.
 pub fn left_isometry(rt: &Runtime, v_prev: &Space, p: &Space, v: &Space) -> Result<Tensor, Error> {
@@ -39,18 +39,34 @@ pub fn rot(t: &Tensor) -> Result<Tensor, Error> {
 /// `conj(A[1 2; -1]) h[2 -2; 3 -4] A[1 3; -3]`.
 fn left_bond(h: &Tensor, a: &Tensor) -> Result<Tensor, Error> {
     // h: a=0 b=1 | c=2 d=3; A: l=0 c=1 | i=2.
-    let z = planar::contract(h, &[2], a, &[1])?; // [a,b,d] <- [l,i]
-    let y = planar::contract(&a.adjoint()?, &[2, 1], &z, &[0, 3])?; // [i'] <- [i,d,b]
-    y.repartition(2)
+    let z = h.planar_contract(a, &spec(&[2], &[1], &[0, 1, 2], &[3, 4]))?; // [a,b,d] <- [l,i]
+    // Open legs i'=0 | b=1 d=2 i=3.
+    a.adjoint()?
+        .planar_contract(&z, &spec(&[2, 1], &[0, 3], &[0, 1], &[3, 2])) // [i',b] <- [i,d]
 }
 
 /// `ER̃ ∈ [P, V_{k-1}*] <- [P, V_{k-1}*]`: bond `(k-1, k)` with the rotated
 /// right tensor `bt = B̃_k ∈ [P, V_k*] <- [V_{k-1}*]` contracted.
 fn right_bond(h: &Tensor, bt: &Tensor) -> Result<Tensor, Error> {
     // bt: q=0 y=1 | x=2.
-    let z = planar::contract(h, &[3], bt, &[0])?; // [c,a,b] <- [x,y]
-    let y = planar::contract(&bt.adjoint()?, &[2, 1], &z, &[4, 2])?; // [x'] <- [a,c,x]
-    y.transpose(&[1, 0], &[2, 3])
+    let z = h.planar_contract(bt, &spec(&[3], &[0], &[2, 0, 1], &[4, 3]))?; // [c,a,b] <- [x,y]
+    // Open legs x'=0 | c=1 a=2 x=3.
+    bt.adjoint()?
+        .planar_contract(&z, &spec(&[2, 1], &[4, 2], &[2, 0], &[1, 3])) // [a,x'] <- [c,x]
+}
+
+fn spec<'a>(
+    lhs: &'a [usize],
+    rhs: &'a [usize],
+    codomain: &'a [usize],
+    domain: &'a [usize],
+) -> ContractSpec<'a> {
+    ContractSpec {
+        lhs,
+        rhs,
+        codomain,
+        domain,
+    }
 }
 
 /// `OL_pos ∈ [V_{pos-1}, P] <- [V_{pos-1}, P]` from `al = AL_1..AL_{pos-1}`.
@@ -90,7 +106,28 @@ pub fn right_operator(
     Ok(or)
 }
 
-/// Two-site effective Hamiltonian `θ ↦ OL∘θ + θ∘rot(OR̃) + h_{(p1,p2)} θ`.
+/// `X ∘ Y` for rank-4 `X`, `Y` with two codomain legs, as a planar
+/// contraction so it can accumulate into a destination (symtn has no
+/// `compose_into`).
+const COMPOSE: ContractSpec<'static> = ContractSpec {
+    lhs: &[2, 3],
+    rhs: &[0, 1],
+    codomain: &[0, 1],
+    domain: &[2, 3],
+};
+
+/// `h_{(p1,p2)} θ`: h's domain `(c, d)` meets θ's `(p1, p2)`. With θ:
+/// l=0 p1=1 | r=2 p2=3, the open legs are a=0 b=1 | l=2 r=3, returned in
+/// θ's layout `[l, a] <- [r, b]`.
+const BOND: ContractSpec<'static> = ContractSpec {
+    lhs: &[3, 2],
+    rhs: &[3, 1],
+    codomain: &[2, 0],
+    domain: &[3, 1],
+};
+
+/// Two-site effective Hamiltonian `θ ↦ OL∘θ + θ∘rot(OR̃) + h_{(p1,p2)} θ`,
+/// the `symtn::krylov::LinearMap` of the centre-bond eigenproblem.
 pub struct Heff {
     ol: Tensor,
     or_dom: Tensor,
@@ -109,19 +146,28 @@ impl Heff {
     }
 
     pub fn apply(&self, theta: &Tensor) -> Result<Tensor, Error> {
-        // θ: l=0 p1=1 | r=2 p2=3. h's domain (c, d) meets (p1, p2).
-        let bond = planar::contract(&self.h, &[3, 2], theta, &[3, 1])? // [a,b] <- [l,r]
-            .transpose(&[2, 0], &[3, 1])?;
-        self.ol
-            .compose(theta)?
-            .axpby(ONE, &theta.compose(&self.or_dom)?, ONE)?
-            .axpby(ONE, &bond, ONE)
+        let mut out = self.h.planar_contract(theta, &BOND)?;
+        self.add_sides(theta, &mut out)?;
+        Ok(out)
     }
 
-    /// `out ← H_eff θ`, the shape of a `symtn::krylov::LinearMap` closure:
-    /// `|x, y| heff.apply_into(x, y)`.
+    /// `out ← H_eff θ`; `out` must have θ's space and is not read.
     pub fn apply_into(&self, theta: &Tensor, out: &mut Tensor) -> Result<(), Error> {
-        self.apply(theta)?.axpby_into(out, ONE, ZERO)
+        self.h.planar_contract_into(theta, &BOND, out, ONE, ZERO)?;
+        self.add_sides(theta, out)
+    }
+
+    /// `out += OL∘θ + θ∘rot(OR̃)`.
+    fn add_sides(&self, theta: &Tensor, out: &mut Tensor) -> Result<(), Error> {
+        self.ol
+            .planar_contract_into(theta, &COMPOSE, out, ONE, ONE)?;
+        theta.planar_contract_into(&self.or_dom, &COMPOSE, out, ONE, ONE)
+    }
+}
+
+impl LinearMap<Tensor> for Heff {
+    fn apply_into(&mut self, x: &Tensor, y: &mut Tensor) -> Result<(), Error> {
+        Heff::apply_into(self, x, y)
     }
 }
 
