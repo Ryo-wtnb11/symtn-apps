@@ -6,7 +6,7 @@
 # it into a private environment and depot, so neither the committed Manifest
 # nor ~/.julia changes.
 using PackageCompiler
-project, image = ARGS
+project, image = ARGS[(end - 1):end]  # after the including script's own path
 seconds = @elapsed create_sysimage(
     [:MPSKit, :TensorKit, :TensorKitSectors];
     project, sysimage_path = image,

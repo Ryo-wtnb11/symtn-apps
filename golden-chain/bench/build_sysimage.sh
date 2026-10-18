@@ -26,5 +26,7 @@ JULIA_DEPOT_PATH="$scratch/depot:${JULIA_DEPOT_PATH:-$HOME/.julia}" "$julia" --p
     using Pkg
     # Installed once (on a host with network); later builds reuse it.
     isfile(joinpath(dirname(Base.active_project()), "Manifest.toml")) || Pkg.add("PackageCompiler"; io = devnull)
-    include(ARGS[1])' "$app/bench/mpskit/sysimage.jl" "$app/bench/mpskit" "$image" | tail -1 >"$image.txt"
+    include(ARGS[1])' "$app/bench/mpskit/sysimage.jl" "$app/bench/mpskit" "$image" >"$image.log" 2>&1
+test -f "$image" || { echo "sysimage build failed, see $image.log" >&2; exit 1; }
+tail -1 "$image.log" >"$image.txt"
 echo "$image"
