@@ -5,27 +5,8 @@ mod common;
 
 use std::collections::BTreeMap;
 
-use golden_chain::dmrg::{Dmrg2, GroundState, find_groundstate};
+use golden_chain::dmrg::{GroundState, find_groundstate};
 use golden_chain::ed::{Boundary, Chain, Fib, quantum_dim};
-
-/// MPSKit 0.13.13 `DMRG2` and `Defaults` values, spelled out: `tol = 1e-10`,
-/// `krylovdim = 30`, eigensolver `maxiter = 200`, `updatetol` clamp
-/// `[1e-14, 1e-4]` with factor `1e-3`. Sweeps are capped at 50 instead of
-/// MPSKit's 200: every case here converges in far fewer, and a run that
-/// does not is a failure, not something to wait for.
-fn mpskit_dmrg2(schedule: Vec<usize>) -> Dmrg2 {
-    Dmrg2 {
-        schedule,
-        tol: 1e-10,
-        maxiter: 50,
-        krylovdim: 30,
-        eig_maxiter: 200,
-        eig_tol_min: 1e-14,
-        eig_tol_max: 1e-4,
-        eig_tol_factor: 1e-3,
-        seed: 7,
-    }
-}
 
 /// The sparse-`H` Lanczos ED oracle equals the dense Jacobi oracle wherever
 /// both run, so it can stand in for Jacobi at L = 20 (6765 paths).
@@ -57,7 +38,8 @@ fn dmrg_ground_energy_matches_ed() {
             for j in [1.0, -1.0] {
                 let chain = Chain::new(len, Boundary::Open(total));
                 let ed = common::lanczos_ground_energy(&chain, j);
-                let gs = find_groundstate(len, j, total, &mpskit_dmrg2(vec![32, 64, 128])).unwrap();
+                let gs = find_groundstate(len, j, total, &common::mpskit_dmrg2(vec![32, 64, 128]))
+                    .unwrap();
                 assert!(
                     gs.converged,
                     "L {len} total {total:?} J {j}: {:?}",
@@ -131,7 +113,8 @@ fn entanglement_spectrum_matches_ed_schmidt_values() {
         for j in [1.0, -1.0] {
             let chain = Chain::new(len, Boundary::Open(total));
             let (e0, psi) = common::jacobi_ground(chain.hamiltonian(j), chain.dim());
-            let gs: GroundState = find_groundstate(len, j, total, &mpskit_dmrg2(vec![64])).unwrap();
+            let gs: GroundState =
+                find_groundstate(len, j, total, &common::mpskit_dmrg2(vec![64])).unwrap();
             assert!((gs.energy - e0).abs() <= 1e-10);
             for (bond, spectrum) in (1..len).zip(&gs.spectra) {
                 let ed = ed_schmidt(&chain, &psi, bond);
@@ -143,9 +126,14 @@ fn entanglement_spectrum_matches_ed_schmidt_values() {
                     (weight - 1.0).abs() <= 1e-12,
                     "bond {bond}: Σ d λ² = {weight}"
                 );
-                for (x, values) in spectrum {
-                    let mps = significant(values.iter().map(|l| l * l), 1e-12);
-                    let expected = significant(ed[x].iter().map(|s2| s2 / quantum_dim(*x)), 1e-12);
+                for x in [Fib::One, Fib::Tau] {
+                    let values = spectrum
+                        .iter()
+                        .filter(|(y, _)| *y == x)
+                        .flat_map(|(_, v)| v);
+                    let mps = significant(values.map(|l| l * l), 1e-12);
+                    let ed = ed.get(&x).into_iter().flatten();
+                    let expected = significant(ed.map(|s2| s2 / quantum_dim(x)), 1e-12);
                     assert_eq!(mps.len(), expected.len(), "bond {bond} sector {x:?}");
                     for (a, b) in mps.iter().zip(&expected) {
                         assert!(
