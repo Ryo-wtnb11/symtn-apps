@@ -272,9 +272,9 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "krylov"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "196257dabf65d3c9dab827eac19f5f5c7ee218bd46d0b3f85522767f8aa55c69"
+checksum = "cb0adaad81fb8f6c2d5b9a7adf7468c716dd17575ab4e7a76d75e89be6d7ed72"
 dependencies = [
  "lapack",
  "num-complex",
@@ -737,7 +737,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "symtn"
 version = "0.1.1"
-source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=54c3d162e4e751122ad7f35e537b3f8d3ea45ddc#54c3d162e4e751122ad7f35e537b3f8d3ea45ddc"
+source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb#2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb"
 dependencies = [
  "krylov",
  "num-complex",
@@ -752,7 +752,7 @@ dependencies = [
 [[package]]
 name = "symtn-core"
 version = "0.1.1"
-source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=54c3d162e4e751122ad7f35e537b3f8d3ea45ddc#54c3d162e4e751122ad7f35e537b3f8d3ea45ddc"
+source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb#2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb"
 dependencies = [
  "quick_cache",
  "rustc-hash",
@@ -763,7 +763,7 @@ dependencies = [
 [[package]]
 name = "symtn-dense"
 version = "0.1.1"
-source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=54c3d162e4e751122ad7f35e537b3f8d3ea45ddc#54c3d162e4e751122ad7f35e537b3f8d3ea45ddc"
+source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb#2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb"
 dependencies = [
  "num-complex",
  "tenferro-cpu",
@@ -774,7 +774,7 @@ dependencies = [
 [[package]]
 name = "symtn-matrixalgebra"
 version = "0.1.1"
-source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=54c3d162e4e751122ad7f35e537b3f8d3ea45ddc#54c3d162e4e751122ad7f35e537b3f8d3ea45ddc"
+source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb#2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb"
 dependencies = [
  "num-complex",
  "num-traits",
@@ -787,7 +787,7 @@ dependencies = [
 [[package]]
 name = "symtn-operations"
 version = "0.1.1"
-source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=54c3d162e4e751122ad7f35e537b3f8d3ea45ddc#54c3d162e4e751122ad7f35e537b3f8d3ea45ddc"
+source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb#2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb"
 dependencies = [
  "num-complex",
  "num-traits",
@@ -802,7 +802,7 @@ dependencies = [
 [[package]]
 name = "symtn-sectors"
 version = "0.1.1"
-source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=54c3d162e4e751122ad7f35e537b3f8d3ea45ddc#54c3d162e4e751122ad7f35e537b3f8d3ea45ddc"
+source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb#2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb"
 dependencies = [
  "fusion-symbols",
  "num-complex",
@@ -812,7 +812,7 @@ dependencies = [
 [[package]]
 name = "symtn-tensors"
 version = "0.1.1"
-source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=54c3d162e4e751122ad7f35e537b3f8d3ea45ddc#54c3d162e4e751122ad7f35e537b3f8d3ea45ddc"
+source = "git+https://github.com/Ryo-wtnb11/symtn-rs?rev=2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb#2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb"
 dependencies = [
  "num-complex",
  "num-traits",

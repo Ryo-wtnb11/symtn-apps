@@ -29,8 +29,8 @@ CI builds with `--locked`.
 
 | Dependency | Pin | Features |
 | --- | --- | --- |
-| symtn | [`54c3d16`](https://github.com/Ryo-wtnb11/symtn-rs/commit/54c3d162e4e751122ad7f35e537b3f8d3ea45ddc) | `krylov`, `blas-openblas` (no default `cpu-faer`) |
-| krylov | via symtn's re-export `symtn::krylov` (krylov 0.1 from crates.io) | — |
+| symtn | [`2b7c4ef`](https://github.com/Ryo-wtnb11/symtn-rs/commit/2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb) | `krylov`, `blas-openblas` (no default `cpu-faer`) |
+| krylov | via symtn's re-export `symtn::krylov` (krylov 0.2 from crates.io) | — |
 
 The Lanczos eigensolver is reached only through `symtn::krylov`, so the app
 can never resolve a second krylov whose `Vector` trait would not unify with

@@ -263,7 +263,7 @@ fn lanczos_on_the_effective_hamiltonian_finds_the_ed_ground_energy() {
                 let s = setup_with(rule, v, total, pos, j);
                 let x0 = s.theta(21 + pos as u64);
                 let mut op = |x: &Tensor, y: &mut Tensor| s.heff.apply_into(x, y);
-                let alg = Lanczos::new().krylovdim(chain.dim().max(2)).tol(1e-12);
+                let alg = Lanczos::new(chain.dim().max(2), 100, 1e-12);
                 let mut ws = Workspace::with_capacity(&x0, alg.get_krylovdim()).unwrap();
                 let (values, _, _) =
                     krylov::eigsolve(&mut op, &x0, 1, Which::SmallestReal, &alg, &mut ws).unwrap();

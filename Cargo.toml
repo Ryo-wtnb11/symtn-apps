@@ -14,5 +14,5 @@ publish = false
 # symtn it was validated with. Bump in a dedicated commit.
 # `krylov` declares LAPACK, so the binary needs a provider; `blas-openblas`
 # is symtn's own krylov feature contract (no default `cpu-faer`).
-symtn = { git = "https://github.com/Ryo-wtnb11/symtn-rs", rev = "54c3d162e4e751122ad7f35e537b3f8d3ea45ddc", default-features = false, features = ["krylov", "blas-openblas"] }
+symtn = { git = "https://github.com/Ryo-wtnb11/symtn-rs", rev = "2b7c4ef151fc6e1b0e78eabf96656b6f0cd5d1eb", default-features = false, features = ["krylov", "blas-openblas"] }
 num-complex = "0.4"
