@@ -11,7 +11,8 @@
 //! `kind` is
 //! - `cold`: setup plus the first sweep of the first run in this process;
 //! - `full`: a warm run to convergence at fixed D, wall time of the call;
-//! - `sweep`: one sweep of a warm run of exactly [`FIXED_SWEEPS`] sweeps.
+//! - `sweep`: one sweep of a warm run of exactly [`FIXED_SWEEPS`] sweeps
+//!   (sweep 1 includes the setup).
 
 #[path = "../tests/common/mod.rs"]
 mod common;
@@ -124,7 +125,9 @@ fn warm(
     for rep in 1..=FIXED_REPEATS[long] {
         let gs = find_groundstate(rt, len, j, Fib::One, &fixed)?;
         for (k, s) in gs.sweeps.iter().enumerate() {
-            row(threads, "sweep", len, d, j, rep, k + 1, s.seconds, s);
+            // Sweep 1 includes the setup, as MPSKit's `finalize` stamps do.
+            let seconds = s.seconds + if k == 0 { gs.setup_seconds } else { 0.0 };
+            row(threads, "sweep", len, d, j, rep, k + 1, seconds, s);
         }
     }
     eprintln!("L {len} D {d} J {j} done");
