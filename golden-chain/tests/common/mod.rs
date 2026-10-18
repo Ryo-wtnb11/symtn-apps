@@ -116,9 +116,13 @@ pub fn lanczos_ground_energy(chain: &Chain, j: f64) -> f64 {
 /// and factor `1e-3`), with two changes:
 /// - the `updatetol` ceiling is 1e-12, not 1e-4. At 1e-4 the second sweep's
 ///   eigensolves are already below tolerance at their start vectors and
-///   return them unchanged, so `ϵ ≈ 1e-14` stops the run early: at L = 20,
-///   `J = -1` it ends 2.8e-9 (total 1) and 3.7e-9 (total τ) above the ED
-///   ground energy, outside the 1e-9 gate;
+///   return them unchanged, so `ϵ ≈ 1e-14` stops the run early. Measured
+///   with a single-value schedule `[128]` (as in the example's ED
+///   comparison), at L = 20, `J = -1`, it ends 2.8e-9 (total 1) and 3.7e-9
+///   (total τ) above the ED ground energy, outside the 1e-9 gate. A ramp
+///   such as `[32, 64, 128]` hides most of the effect (worst 1.9e-10 over
+///   the gated cases) because each change of D keeps `ϵ` large one sweep
+///   longer;
 /// - at most 50 sweeps, not 200: every case converges in a few, and one that
 ///   does not is a failure, not something to wait for.
 pub fn mpskit_dmrg2(schedule: Vec<usize>) -> Dmrg2 {

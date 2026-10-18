@@ -33,15 +33,13 @@ def chord(l, n):
 
 
 def fit(l, s, n):
-    """c and s' per residue of l mod 6 over L/8 <= l <= 7L/8 (as tests/central_charge.rs),
-    c averaged; returns c and the per-residue offsets."""
-    cs, offsets = [], {}
+    """(c_r, s'_r) fitted on each residue r of l mod 6 over L/8 <= l <= 7L/8,
+    as tests/central_charge.rs does; the quoted c is the mean of the c_r."""
+    fits = []
     for r in range(6):
         m = (l % 6 == r) & (l >= n // 8) & (l <= 7 * n // 8)
-        c, s0 = np.polyfit(chord(l[m], n), s[m], 1)
-        cs.append(c)
-        offsets[r] = s0
-    return float(np.mean(cs)), offsets
+        fits.append(np.polyfit(chord(l[m], n), s[m], 1))
+    return fits
 
 
 def profile():
@@ -51,13 +49,14 @@ def profile():
         l = np.array([int(r["l"]) for r in data if float(r["J"]) == j])
         s = np.array([float(r["S"]) for r in data if float(r["J"]) == j])
         n = len(l) + 1
-        c, offsets = fit(l, s, n)
+        fits = fit(l, s, n)
+        c = float(np.mean([c_r for c_r, _ in fits]))
         ax.plot(l, s, ".", color="black", ms=4, label="DMRG")
-        # The fitted curve per residue class (the profile alternates).
+        # Each residue class's own fit (the profile alternates with l mod 6).
         x = np.linspace(1, n - 1, 400)
-        for r, s0 in offsets.items():
-            ax.plot(x, c * chord(x, n) + s0, "-", color="tab:blue", lw=0.6, alpha=0.6,
-                    label=f"(c/6) ln[(2L/π) sin(πl/L)] + s′, c = {c:.3f}" if r == 0 else None)
+        for r, (c_r, s0_r) in enumerate(fits):
+            ax.plot(x, c_r * chord(x, n) + s0_r, "-", color="tab:blue", lw=0.6, alpha=0.6,
+                    label=f"(c/6) ln[(2L/π) sin(πl/L)] + s′ per l mod 6, mean c = {c:.3f}" if r == 0 else None)
         ax.set_title(LABEL[j])
         ax.set_xlabel("bond l")
         ax.legend(loc="lower center", fontsize=8)
@@ -74,9 +73,9 @@ def sweeps():
         sel = [r for r in data if float(r["J"]) == j]
         k = [int(r["sweep"]) for r in sel]
         de = [abs(float(r["dE"])) for r in sel]
-        tr = [float(r["discarded"]) for r in sel]
+        tr = [float(r["truncation_error"]) for r in sel]
         ax.semilogy(k[1:], de[1:], "o-", color=color, label=f"|ΔE|, J = {j:+.0f}")
-        ax.semilogy(k, tr, "s--", color=color, mfc="none", label=f"max discarded weight, J = {j:+.0f}")
+        ax.semilogy(k, tr, "s--", color=color, mfc="none", label=f"max truncation error, J = {j:+.0f}")
     ax.set_xlabel("sweep")
     ax.set_xticks(sorted({int(r["sweep"]) for r in data}))
     ax.set_title("DMRG2 convergence, L = 96, D = 32, 64, 128")

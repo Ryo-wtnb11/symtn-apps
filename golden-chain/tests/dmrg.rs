@@ -147,3 +147,22 @@ fn entanglement_spectrum_matches_ed_schmidt_values() {
         }
     }
 }
+
+/// A run never reports convergence before its last scheduled bond
+/// dimension. With MPSKit's loose eigensolver ceiling (`tol_max = 1e-4`)
+/// this case reaches `ϵ ≤ tol` at D = 64 in its second sweep; it must still
+/// sweep at D = 128. A `maxiter` too short for the schedule is rejected.
+#[test]
+fn convergence_waits_for_the_last_bond_dimension() {
+    let mut alg = common::mpskit_dmrg2(vec![32, 64, 128]);
+    alg.eig_tol_max = 1e-4;
+    let gs = find_groundstate(20, 1.0, Fib::One, &alg).unwrap();
+    let dims: Vec<usize> = gs.sweeps.iter().map(|s| s.bond_dimension).collect();
+    assert!(gs.converged);
+    assert!(dims.len() >= 3, "stopped before D = 128: {dims:?}");
+    assert_eq!(&dims[..3], &[32, 64, 128], "{dims:?}");
+    assert!(dims[3..].iter().all(|&d| d == 128), "{dims:?}");
+
+    alg.maxiter = 2;
+    assert!(find_groundstate(20, 1.0, Fib::One, &alg).is_err());
+}

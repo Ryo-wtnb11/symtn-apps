@@ -49,7 +49,7 @@ fn central_charge_from_the_entanglement_profile() {
     // L ≡ 0 mod 6: at J = -1 a length not divisible by 3 frustrates the
     // Potts order at the open ends and adds an L-dependent entropy bump
     // (half-chain S of the J = -1 ground state: 0.56, 0.95, 0.99, 0.67 at L = 12, 16,
-    // 20, 24). D = 128 in the last sweep keeps the discarded weight ≲ 1e-8.
+    // 20, 24). D = 128 in the last sweep keeps the truncation error ≲ 1e-8.
     const LEN: usize = 96;
     for (j, expected) in [(1.0, 0.7), (-1.0, 0.8)] {
         let gs =
@@ -57,14 +57,14 @@ fn central_charge_from_the_entanglement_profile() {
         let c = central_charge(&gs.entropies(), LEN);
         let last = gs.sweeps.last().unwrap();
         eprintln!(
-            "J {j}: c = {c:.4} (expected {expected}), E = {}, sweeps {}, converged {}, discarded {:.1e}",
+            "J {j}: c = {c:.4} (expected {expected}), E = {}, sweeps {}, converged {}, truncation error {:.1e}",
             gs.energy,
             gs.sweeps.len(),
             gs.converged,
             last.max_truncation_error
         );
         // A loose band: finite size, boundary terms and MPSKit's entropy
-        // convention (no `Σ p_s ln d_s` term) all shift a 64-site fit.
+        // convention (no `Σ p_s ln d_s` term) all shift a 96-site fit.
         assert!((c - expected).abs() <= 0.05, "J {j}: c = {c}");
     }
 }

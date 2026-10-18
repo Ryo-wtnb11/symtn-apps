@@ -4,7 +4,7 @@
 //! `cargo run --release --example golden_chain`
 //!
 //! - `profile.csv`: `J,l,S` for the open chain of length [`PROFILE_LEN`];
-//! - `sweeps.csv`: `J,sweep,E,dE,discarded,epsilon` of the same runs;
+//! - `sweeps.csv`: `J,sweep,D,E,dE,truncation_error,epsilon` of the same runs;
 //! - `energies.csv`: `L,J,total,E_dmrg,E_ed` against the sparse-Lanczos ED.
 
 // The ED oracle and the MPSKit-like settings are the tests' own, reused
@@ -34,7 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (mut profile, mut sweeps) = (
         String::from("J,l,S\n"),
-        String::from("J,sweep,E,dE,discarded,epsilon\n"),
+        String::from("J,sweep,D,E,dE,truncation_error,epsilon\n"),
     );
     for j in [1.0, -1.0] {
         let alg = common::mpskit_dmrg2(PROFILE_SCHEDULE.to_vec());
@@ -45,8 +45,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for (k, s) in gs.sweeps.iter().enumerate() {
             writeln!(
                 sweeps,
-                "{j},{},{:.15e},{:.6e},{:.6e},{:.6e}",
+                "{j},{},{},{:.15e},{:.6e},{:.6e},{:.6e}",
                 k + 1,
+                s.bond_dimension,
                 s.energy,
                 s.delta_energy,
                 s.max_truncation_error,

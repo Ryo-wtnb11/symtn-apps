@@ -44,8 +44,13 @@ The tests and the example use MPSKit's default values with one exception:
 `tol_max = 1e-12` instead of `1e-4`. At `1e-4`, the second sweep's
 eigensolves are already below tolerance at their start vectors and return
 them unchanged. The run then stops with `ϵ ≈ 1e-14`, yet the energy is
-still above the ED ground energy, by 2.8e-9 (total 1) and 3.7e-9 (total τ)
-at L = 20, `J = -1`.
+still above the ED ground energy. With a single-value schedule `D = 128` at
+L = 20, `J = -1`, the excess is 2.8e-9 (total 1) and 3.7e-9 (total τ). A ramp
+such as 32 → 64 → 128 hides most of the effect (worst 1.9e-10), because
+each change of D keeps `ϵ` large for one more sweep.
+
+Convergence is tested only once the last scheduled D is in use, so a run
+always reaches the requested bond dimension. Each `SweepLog` records its D.
 
 ## Validation
 
@@ -75,7 +80,7 @@ symtn dependency.
 
 ```sh
 cargo test --release -p golden-chain                       # all checks, about 10 s
-cargo test --release --test central_charge -- --ignored    # central-charge fit, about 30 s
+cargo test --release --test central_charge -- --ignored    # central-charge fit, about 90 s
 cargo run --release --example golden_chain                 # CSV data in golden-chain/out/
 uv run golden-chain/scripts/plot.py                        # figures in golden-chain/docs/figures/
 ```
@@ -96,10 +101,11 @@ residue of `l mod 6` (the open chain alternates with bond parity, and the
 ![Entanglement profile at L = 96 with the CFT fit](docs/figures/entropy_profile.png)
 
 **Convergence.** The plot shows `|ΔE|` between sweeps and the largest
-discarded weight in each sweep, for the D ramp 32 → 64 → 128 at L = 96.
+truncation error in each sweep, `√(Σ_c d_c Σ σ²)` over the discarded
+Schmidt values,, for the D ramp 32 → 64 → 128 at L = 96.
 Both runs stop after three sweeps at `max ϵ ≤ 1e-10`.
 
-![Per-sweep |ΔE| and discarded weight](docs/figures/convergence.png)
+![Per-sweep |ΔE| and truncation error](docs/figures/convergence.png)
 
 **Ground energy against ED.** At D = 128 every case agrees with the
 sparse-Lanczos ED to ≤ 1.1e-13. That holds for L = 24 (46368 paths) too,

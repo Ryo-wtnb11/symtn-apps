@@ -29,12 +29,14 @@ use crate::mps::{Heff, left_step, right_isometry, right_step};
 pub struct Dmrg2 {
     /// Bond dimension (total quantum dimension, `Truncation::Rank`) per
     /// sweep; the last value repeats. The first one also sizes the initial
-    /// virtual spaces.
+    /// virtual spaces. Convergence is only tested from the sweep that uses
+    /// the last value on, so a run never stops short of the requested D.
     pub schedule: Vec<usize>,
     /// Stop once the largest per-bond `ϵ` of a sweep is at or below this
     /// (MPSKit `DMRG2.tol`).
     pub tol: f64,
-    /// Maximal number of sweeps (MPSKit `DMRG2.maxiter`).
+    /// Maximal number of sweeps (MPSKit `DMRG2.maxiter`); at least
+    /// `schedule.len()`.
     pub maxiter: usize,
     /// Lanczos Krylov dimension (MPSKit `Defaults.krylovdim`).
     pub krylovdim: usize,
@@ -52,12 +54,15 @@ pub struct Dmrg2 {
 /// One sweep (left to right and back).
 #[derive(Clone, Debug)]
 pub struct SweepLog {
+    /// Bond dimension (`Truncation::Rank`) of this sweep.
+    pub bond_dimension: usize,
     /// Energy of the truncated state at the end of the sweep.
     pub energy: f64,
     /// Change of `energy` against the previous sweep (`NaN` for the first).
     pub delta_energy: f64,
-    /// Largest discarded weight, `sqrt(Σ_c d_c Σ_discarded σ²)` of the
-    /// normalized two-site eigenvector.
+    /// Largest truncation error, the norm of the discarded part
+    /// `sqrt(Σ_c d_c Σ_discarded σ²)` of the normalized two-site eigenvector
+    /// (MatrixAlgebraKit `truncation_error`).
     pub max_truncation_error: f64,
     /// Largest `ϵ_bond = |1 - |⟨θ_old, u s vh⟩||` (MPSKit `v`).
     pub epsilon: f64,
@@ -92,9 +97,9 @@ impl GroundState {
 
 /// Ground state of `H = -J Σ P^(1)` on `len` anyons with `x_L = total`.
 pub fn find_groundstate(len: usize, j: f64, total: Fib, alg: &Dmrg2) -> Result<GroundState, Error> {
-    if len < 3 || alg.schedule.is_empty() || alg.maxiter == 0 {
+    if len < 3 || alg.schedule.is_empty() || alg.maxiter < alg.schedule.len() {
         return Err(Error::InvalidArgument(
-            "DMRG2 needs L >= 3, a nonempty schedule and maxiter >= 1".into(),
+            "DMRG2 needs L >= 3, a nonempty schedule and maxiter >= schedule.len()".into(),
         ));
     }
     let rule = Arc::new(TableRule::fibonacci());
@@ -133,6 +138,7 @@ pub fn find_groundstate(len: usize, j: f64, total: Fib, alg: &Dmrg2) -> Result<G
                 .clamp(alg.eig_tol_min, alg.eig_tol_max),
         );
         let mut log = SweepLog {
+            bond_dimension: rank,
             energy: f64::NAN,
             delta_energy: f64::NAN,
             max_truncation_error: 0.0,
@@ -178,12 +184,12 @@ pub fn find_groundstate(len: usize, j: f64, total: Fib, alg: &Dmrg2) -> Result<G
         }
         epsilon = log.epsilon;
         sweeps.push(log);
-        if epsilon <= alg.tol {
+        if iter >= alg.schedule.len() && epsilon <= alg.tol {
             converged = true;
             break;
         }
     }
-    let s = last.expect("maxiter >= 1 runs one sweep");
+    let s = last.expect("maxiter >= schedule.len() >= 1 runs a sweep");
     Ok(GroundState {
         energy: sweeps.last().map_or(f64::NAN, |l| l.energy),
         converged,
