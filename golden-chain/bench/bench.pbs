@@ -7,10 +7,11 @@
 #
 # BENCH_ROOT holds the symtn-apps checkout, the Cargo target, the private
 # Julia depot and results/. Sources are fetched and built on the login node
-# beforehand (cargo fetch; cargo build with OPENBLAS_DYNAMIC_ARCH=1, so the
-# OpenBLAS kernels are picked at run time like Julia's OpenBLAS_jll); the
-# job precompiles Julia packages and the sysimage on the compute node it
-# times on.
+# beforehand (cargo fetch; cargo build with OPENBLAS_TARGET=SKYLAKEX, the
+# compute nodes' Cascade Lake: OpenBLAS 0.3.32 built with DYNAMIC_ARCH=1
+# crashes in cblas_zgemm_batch, a null small-matrix kernel); the job
+# precompiles Julia packages and the sysimage on the compute node it times
+# on.
 #
 # STAGE first-and-1: first-result rows (1 thread, all cases) and warm rows at
 #   1 thread for L in {24, 48, 96};
@@ -27,7 +28,7 @@ root=${BENCH_ROOT:?qsub -v BENCH_ROOT=...}
 stage=${STAGE:?qsub -v STAGE=first-and-1|threads}
 app=$root/symtn-apps/golden-chain
 results=$root/results
-export CARGO_TARGET_DIR=$root/target JULIA_DEPOT_PATH=$root/julia-depot OPENBLAS_DYNAMIC_ARCH=1
+export CARGO_TARGET_DIR=$root/target JULIA_DEPOT_PATH=$root/julia-depot OPENBLAS_TARGET=SKYLAKEX
 export PATH=$HOME/.cargo/bin:$HOME/.juliaup/bin:$PATH
 mkdir -p "$results"
 
