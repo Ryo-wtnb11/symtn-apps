@@ -72,6 +72,7 @@ def summarize(data):
             "eigsolve_s": mean("eigsolve_s"),
             "svd_s": mean("svd_s"),
             "env_s": mean("env_s"),
+            "apply_s": mean("apply_s"),
             "profile_s": mean("seconds"),
         }
     return out
@@ -94,16 +95,16 @@ def tables(s, threads):
             f"| {b['sweep_s'] / a['sweep_s']:.2f} |"
         )
     print("\nPer steady sweep (sweeps 2..4, mean): H_eff applications and time split (s)\n")
-    print("| L | D | J | matvecs symtn / MPSKit | eigsolve symtn / MPSKit | SVD symtn / MPSKit | env symtn / MPSKit | per matvec ms symtn / MPSKit |")
-    print("|---|---|---|---|---|---|---|---|")
+    print("| L | D | J | matvecs symtn / MPSKit | eigsolve symtn / MPSKit | of which H_eff apply | SVD symtn / MPSKit | env symtn / MPSKit | ms per H_eff apply symtn / MPSKit |")
+    print("|---|---|---|---|---|---|---|---|---|")
     for c in cases:
         a, b = s.get(("symtn", threads, *c)), s.get(("MPSKit", threads, *c))
         if a is None or b is None:
             continue
-        pm = lambda x: 1e3 * x["eigsolve_s"] / x["matvecs"]
+        pm = lambda x: 1e3 * x["apply_s"] / x["matvecs"]
         print(
             f"| {c[0]} | {c[1]} | {c[2]:+d} | {a['matvecs']:.0f} / {b['matvecs']:.0f} "
-            f"| {a['eigsolve_s']:.3g} / {b['eigsolve_s']:.3g} | {a['svd_s']:.3g} / {b['svd_s']:.3g} "
+            f"| {a['eigsolve_s']:.3g} / {b['eigsolve_s']:.3g} | {a['apply_s']:.3g} / {b['apply_s']:.3g} | {a['svd_s']:.3g} / {b['svd_s']:.3g} "
             f"| {a['env_s']:.3g} / {b['env_s']:.3g} | {pm(a):.3g} / {pm(b):.3g} |"
         )
 

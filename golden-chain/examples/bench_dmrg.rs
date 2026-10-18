@@ -7,7 +7,7 @@
 //! ```
 //!
 //! Rows (CSV, no header): `side,threads,kind,L,D,J,rep,sweep,seconds,
-//! eigsolve_s,svd_s,env_s,matvecs,energy,epsilon,sweeps,converged`, where
+//! eigsolve_s,svd_s,env_s,apply_s,matvecs,energy,epsilon,sweeps,converged`, where
 //! `kind` is
 //! - `cold`: setup plus the first sweep of the first run in this process;
 //! - `full`: a warm run to convergence at fixed D, wall time of the call;
@@ -113,7 +113,7 @@ fn warm(
             long = 1;
         }
         println!(
-            "symtn,{threads},full,{len},{d},{j},{rep},,{seconds:.6e},,,,{},{:.15e},{:.3e},{},{}",
+            "symtn,{threads},full,{len},{d},{j},{rep},,{seconds:.6e},,,,,{},{:.15e},{:.3e},{},{}",
             gs.sweeps.iter().map(|s| s.matvecs).sum::<usize>(),
             gs.energy,
             gs.sweeps.last().map_or(f64::NAN, |s| s.epsilon),
@@ -147,7 +147,13 @@ fn row(
     s: &SweepLog,
 ) {
     println!(
-        "symtn,{threads},{kind},{len},{d},{j},{rep},{sweep},{seconds:.6e},{:.6e},{:.6e},{:.6e},{},{:.15e},{:.3e},,",
-        s.eigsolve_seconds, s.svd_seconds, s.environment_seconds, s.matvecs, s.energy, s.epsilon
+        "symtn,{threads},{kind},{len},{d},{j},{rep},{sweep},{seconds:.6e},{:.6e},{:.6e},{:.6e},{:.6e},{},{:.15e},{:.3e},,",
+        s.eigsolve_seconds,
+        s.svd_seconds,
+        s.environment_seconds,
+        s.apply_seconds,
+        s.matvecs,
+        s.energy,
+        s.epsilon
     );
 }

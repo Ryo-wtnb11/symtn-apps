@@ -37,7 +37,7 @@ mpskit() { julia --project="$app/bench/mpskit" -t "$threads" "$app/bench/mpskit/
     echo "# settings (both sides): D = truncrank(D) on the total quantum dimension; tol 1e-10, maxiter 50; Lanczos krylovdim 30, maxiter 200, eager; updatetol clamp(eps*1e-3/sqrt(sweep), 1e-14, 1e-12); initial virtual spaces D/(1+phi) per sector capped at the reachable space"
     echo "# initial state: symtn right-isometric sites + seeded random first centre; MPSKit seeded random FiniteMPS (Random.seed!(1234))"
     echo "# kinds: cold = setup + first sweep of the first run in a fresh process; full = warm run to convergence; sweep = one sweep of a warm run of exactly 4 sweeps (sweep 1 includes setup); profile = MPSKit's DMRG2 loop copied with timers (split and matvecs only)"
-    echo "side,threads,kind,L,D,J,rep,sweep,seconds,eigsolve_s,svd_s,env_s,matvecs,energy,epsilon,sweeps,converged"
+    echo "side,threads,kind,L,D,J,rep,sweep,seconds,eigsolve_s,svd_s,env_s,apply_s,matvecs,energy,epsilon,sweeps,converged"
 } >"$out"
 
 for len in $lens; do

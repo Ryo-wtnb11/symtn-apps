@@ -144,6 +144,9 @@ pub struct Heff {
     ol: Tensor,
     or_dom: Tensor,
     h: Tensor,
+    /// Wall time spent in [`LinearMap::apply_into`], the eigensolver's
+    /// applications.
+    apply_seconds: f64,
 }
 
 impl Heff {
@@ -154,7 +157,13 @@ impl Heff {
             ol,
             or_dom: rot(or)?,
             h,
+            apply_seconds: 0.0,
         })
+    }
+
+    /// Wall time of the eigensolver's applications so far.
+    pub fn apply_seconds(&self) -> f64 {
+        self.apply_seconds
     }
 
     pub fn apply(&self, theta: &Tensor) -> Result<Tensor, Error> {
@@ -179,7 +188,10 @@ impl Heff {
 
 impl LinearMap<Tensor> for Heff {
     fn apply_into(&mut self, x: &Tensor, y: &mut Tensor) -> Result<(), Error> {
-        Heff::apply_into(self, x, y)
+        let clock = std::time::Instant::now();
+        let result = Heff::apply_into(self, x, y);
+        self.apply_seconds += clock.elapsed().as_secs_f64();
+        result
     }
 }
 

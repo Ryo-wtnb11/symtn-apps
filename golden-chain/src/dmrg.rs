@@ -83,6 +83,9 @@ pub struct SweepLog {
     pub eigsolve_seconds: f64,
     pub svd_seconds: f64,
     pub environment_seconds: f64,
+    /// The part of `eigsolve_seconds` spent applying `H_eff`; the rest is
+    /// the Lanczos vector work (orthogonalization, workspace, Ritz vector).
+    pub apply_seconds: f64,
 }
 
 /// A Schmidt spectrum per sector, `(x, λ_x)`, normalized as
@@ -176,6 +179,7 @@ pub fn find_groundstate(
             eigsolve_seconds: 0.0,
             svd_seconds: 0.0,
             environment_seconds: 0.0,
+            apply_seconds: 0.0,
         };
         let forward = (1..len).map(|pos| (pos, true));
         let backward = (1..len - 1).rev().map(|pos| (pos, false));
@@ -190,6 +194,7 @@ pub fn find_groundstate(
             log.matvecs += bond.matvecs;
             log.eigsolve_seconds += bond.eigsolve_seconds;
             log.svd_seconds += bond.svd_seconds;
+            log.apply_seconds += bond.heff.apply_seconds();
             let clock = Instant::now();
             let Svd { u, s, vh } = bond.factors;
             if right {

@@ -5,7 +5,7 @@
 #     julia --project=golden-chain/bench/mpskit -t <threads> golden-chain/bench/mpskit/bench.jl warm <threads> [L...]
 #
 # Rows as on the Rust side: side,threads,kind,L,D,J,rep,sweep,seconds,
-# eigsolve_s,svd_s,env_s,matvecs,energy,epsilon,sweeps,converged, where kind is
+# eigsolve_s,svd_s,env_s,apply_s,matvecs,energy,epsilon,sweeps,converged, where kind is
 # - cold: state construction, environments and the first sweep of the first
 #   run in this process (includes JIT compilation);
 # - full: a warm run to convergence at fixed D, wall time from the state
@@ -13,8 +13,8 @@
 # - sweep: one sweep of a warm `find_groundstate` run of exactly FIXED_SWEEPS
 #   sweeps, timed by the `finalize` callback (sweep 1 includes the setup);
 # - profile: one sweep of `profiled_dmrg2`, a copy of MPSKit's DMRG2 loop
-#   with timers and the eigensolver's `numops` (the library loop exposes
-#   neither); not used for the timing tables.
+#   with timers, timed H_eff applications and the eigensolver's `numops`
+#   (the library loop exposes none of them); not used for the timing tables.
 
 using MPSKit, TensorKit, TensorKitSectors, Random, LinearAlgebra
 using MPSKit: KrylovKit, AC2_hamiltonian, calc_galerkin, updatetol, _transpose_front
@@ -65,8 +65,8 @@ function timed_run(H, L, D; kwargs...)
     return ψ, envs, ϵ, (stop - start) / 1.0e9, (stamps .- start) ./ 1.0e9
 end
 
-row(threads, kind, L, D, J, rep, sweep, seconds; eig = "", svd = "", env = "", matvecs = "", energy = "", epsilon = "", sweeps = "", converged = "") =
-    (println(join(("MPSKit", threads, kind, L, D, Int(J), rep, sweep, seconds, eig, svd, env, matvecs, energy, epsilon, sweeps, converged), ",")); flush(stdout))
+row(threads, kind, L, D, J, rep, sweep, seconds; eig = "", svd = "", env = "", apply = "", matvecs = "", energy = "", epsilon = "", sweeps = "", converged = "") =
+    (println(join(("MPSKit", threads, kind, L, D, Int(J), rep, sweep, seconds, eig, svd, env, apply, matvecs, energy, epsilon, sweeps, converged), ",")); flush(stdout))
 
 energy(ψ, H, envs) = real(expectation_value(ψ, H, envs))
 
@@ -110,6 +110,7 @@ function profiled_dmrg2(threads, H, L, D, J)
         zerovector!(ϵs)
         t = zeros(3)  # eigsolve, svd, env
         matvecs = 0
+        apply = Ref(0.0)
         sweep_start = time_ns()
         for (pos, right) in Iterators.flatten((((p, true) for p in 1:(L - 1)), ((p, false) for p in (L - 2):-1:1)))
             t0 = time_ns()
@@ -121,8 +122,9 @@ function profiled_dmrg2(threads, H, L, D, J)
             leftenv(envs, pos, ψ)
             rightenv(envs, pos + 1, ψ)
             Hac2 = AC2_hamiltonian(pos, ψ, H, ψ, envs)
+            timed = x -> (start = time_ns(); y = Hac2(x); apply[] += (time_ns() - start) / 1.0e9; y)
             t1 = time_ns()
-            _, vecs, info = KrylovKit.eigsolve(Hac2, ac2, 1, :SR, alg_eigsolve)
+            _, vecs, info = KrylovKit.eigsolve(timed, ac2, 1, :SR, alg_eigsolve)
             matvecs += info.numops
             t2 = time_ns()
             al, c, ar = svd_trunc!(vecs[1]; trunc = alg.trscheme, alg = alg.alg_svd)
@@ -142,7 +144,7 @@ function profiled_dmrg2(threads, H, L, D, J)
         end
         ϵ = maximum(ϵs)
         row(threads, "profile", L, D, J, 1, iter, (time_ns() - sweep_start) / 1.0e9;
-            eig = t[1], svd = t[2], env = t[3], matvecs, energy = energy(ψ, H, envs), epsilon = ϵ)
+            eig = t[1], svd = t[2], env = t[3], apply = apply[], matvecs, energy = energy(ψ, H, envs), epsilon = ϵ)
     end
     return nothing
 end
