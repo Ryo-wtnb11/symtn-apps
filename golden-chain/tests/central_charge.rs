@@ -44,11 +44,11 @@ fn central_charge(entropies: &[f64], len: usize) -> f64 {
 }
 
 #[test]
-#[ignore = "slow: L = 64 DMRG; run in release"]
+#[ignore = "slow: L = 96 DMRG; run in release"]
 fn central_charge_from_the_entanglement_profile() {
     // L ≡ 0 mod 6: at J = -1 a length not divisible by 3 frustrates the
     // Potts order at the open ends and adds an L-dependent entropy bump
-    // (MPSKit fixture, half-chain S: 0.56, 0.95, 0.99, 0.67 at L = 12, 16,
+    // (half-chain S of the J = -1 ground state: 0.56, 0.95, 0.99, 0.67 at L = 12, 16,
     // 20, 24). D = 128 in the last sweep keeps the discarded weight ≲ 1e-8.
     const LEN: usize = 96;
     for (j, expected) in [(1.0, 0.7), (-1.0, 0.8)] {

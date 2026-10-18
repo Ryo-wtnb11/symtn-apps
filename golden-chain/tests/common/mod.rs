@@ -113,10 +113,12 @@ pub fn lanczos_ground_energy(chain: &Chain, j: f64) -> f64 {
 
 /// MPSKit 0.13.13 `DMRG2` and `Defaults` values, spelled out (`tol = 1e-10`,
 /// `krylovdim = 30`, eigensolver `maxiter = 200`, `updatetol` floor `1e-14`
-/// and factor `1e-3`), with two changes (the first one is shared with the MPSKit fixture):
-/// - the `updatetol` ceiling is 1e-12, not 1e-4: at 1e-4 the second sweep's
-///   eigensolves return their start vectors unchanged, so `ϵ ≈ 1e-16` stops
-///   the run ~1e-9 above the ground energy (MPSKit does the same);
+/// and factor `1e-3`), with two changes:
+/// - the `updatetol` ceiling is 1e-12, not 1e-4. At 1e-4 the second sweep's
+///   eigensolves are already below tolerance at their start vectors and
+///   return them unchanged, so `ϵ ≈ 1e-14` stops the run early: at L = 20,
+///   `J = -1` it ends 2.8e-9 (total 1) and 3.7e-9 (total τ) above the ED
+///   ground energy, outside the 1e-9 gate;
 /// - at most 50 sweeps, not 200: every case converges in a few, and one that
 ///   does not is a failure, not something to wait for.
 pub fn mpskit_dmrg2(schedule: Vec<usize>) -> Dmrg2 {

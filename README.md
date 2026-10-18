@@ -5,57 +5,9 @@ symmetric tensor library. Applications live here, not in symtn: symtn owns
 general categorical tensor operations, and models, algorithms such as DMRG,
 and their physics validation belong to the applications that use them.
 
-## Crates
+## Applications
 
-| Crate | What |
-| --- | --- |
-| [`golden-chain`](golden-chain) | Two-site DMRG for the Fibonacci golden chain on anyonic (`TableRule::fibonacci()`) tensors |
-
-## Golden chain
-
-`L` Fibonacci anyons with `H = -J sum_i P^(1)_{i,i+1}`, the projector onto the
-trivial fusion channel of neighbouring anyons. `J = +1` is critical with the
-tricritical Ising CFT (`c = 7/10`), `J = -1` with the 3-state Potts CFT
-(`c = 4/5`).
-
-Validation does not trust the tensors under test: an exact diagonalization in
-the fusion-path basis is written independently of symtn, and MPSKit results
-are checked in as fixtures (CI never runs Julia).
-
-### Validation
-
-| Test | Oracle |
-| --- | --- |
-| `tests/ed.rs` | ED against TensorKit's 3-anyon matrix and the Temperley–Lieb relations |
-| `tests/heff.rs` | `H_eff` against ED; centre-bond Lanczos = ED ground energy |
-| `tests/dmrg.rs` | DMRG ground energy = ED (sparse Lanczos, cross-checked by Jacobi) to 1e-9, L ≤ 20, both `J`, both total charges; per-bond Schmidt values = ED's (`λ = σ/√d_x` for a unit ED vector) |
-| `tests/mpskit.rs` | E₀, entanglement spectra and entropies per bond against MPSKit `DMRG2`, L ∈ {12, 16, 20, 24} |
-| `tests/central_charge.rs` (`#[ignore]`) | c from `S(l)` at L = 96: ≈ 0.67 (`J = +1`, TCI 0.7), ≈ 0.78 (`J = -1`, Potts 0.8) |
-
-The MPSKit fixture (`reference/mpskit/fixtures/golden_chain.txt`) is the
-only reference artifact in git. Its generator, a Julia script with a pinned
-Project/Manifest, is kept locally and not committed. The fixture header
-records everything needed to trace the values without it:
-- the Julia, MPSKit, TensorKit and TensorKitSectors versions (1.11.6, 0.13.13,
-  0.17.1, 0.3.10);
-- the exact Hamiltonian, initial state and `find_groundstate(…, DMRG2(…))`
-  calls, the cases (L, J, total charge) and D;
-- the one departure from MPSKit's defaults (eigensolver `tol_max = 1e-12`)
-  and why it is needed.
-
-The slow fit runs with
-`cargo test --release --test central_charge -- --ignored --nocapture`, and
-`cargo run --release --example golden_chain` prints a CSV profile.
-
-### Stages
-
-| Stage | Content | Status |
-| --- | --- | --- |
-| S0 | ED oracle, isometric MPS, environments, two-site `H_eff` | done |
-| S1 | `H_eff` checked through symtn's `inner`; entropy | done |
-| S2 | `H_eff` as a krylov `LinearMap`; centre-bond Lanczos equals the ED ground energy (L ≤ 12) | done |
-| S3 | Two-site DMRG (`svd_compact` + `find_truncated` + `restrict_leg`), sweeps, convergence; DMRG = ED to 1e-9 up to L = 20; MPSKit fixtures; central-charge fit | done |
-| S4 | environments and `H_eff` on symtn's `planar_contract` (no app-side planar helper) | done |
+- [`golden-chain`](golden-chain/README.md): two-site DMRG for the Fibonacci golden chain on anyonic (`TableRule::fibonacci()`) tensors, validated against an independent ED and MPSKit.
 
 ## Dependencies
 
@@ -73,12 +25,13 @@ symtn's `TensorMap` impl. krylov declares LAPACK; symtn's `blas-openblas`
 links OpenBLAS, built from source by `openblas-src` (no system library is
 needed, the first build takes several minutes).
 
-## References
+## CI
 
-- A. Feiguin, S. Trebst, A. W. W. Ludwig, M. Troyer, A. Kitaev, Z. Wang,
-  M. H. Freedman, "Interacting anyons in topological quantum liquids: the
-  golden chain", Phys. Rev. Lett. 98, 160409 (2007).
-- TensorKit.jl 0.17.1 and MPSKit.jl 0.13.13 (reference implementations).
+One job on `ubuntu-latest`: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`,
+and `cargo test --release` (the DMRG tests take ~45 s optimized, minutes in a
+debug build). Slow physics runs are `#[ignore]` tests or examples. CI never
+runs Julia: reference data from other libraries is checked in as text
+fixtures.
 
 ## License
 
