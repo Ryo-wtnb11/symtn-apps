@@ -7,7 +7,7 @@ and their physics validation belong to the applications that use them.
 
 ## Applications
 
-- [`golden-chain`](golden-chain/README.md): two-site DMRG for the Fibonacci golden chain on anyonic (`TableRule::fibonacci()`) tensors, validated against an independent ED and MPSKit.
+- [`golden-chain`](golden-chain/README.md): two-site DMRG for the Fibonacci golden chain on anyonic (`TableRule::fibonacci()`) tensors, validated against an independent exact diagonalization.
 
 ## Dependencies
 
@@ -27,11 +27,10 @@ needed, the first build takes several minutes).
 
 ## CI
 
-One job on `ubuntu-latest`: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`,
-and `cargo test --release` (the DMRG tests take ~45 s optimized, minutes in a
-debug build). Slow physics runs are `#[ignore]` tests or examples. CI never
-runs Julia: reference data from other libraries is checked in as text
-fixtures.
+One job on `ubuntu-latest` runs `cargo fmt --check`,
+`cargo clippy --all-targets -D warnings` and `cargo test --release`. The DMRG
+tests take about 10 s optimized and minutes in a debug build. Slow physics
+runs are `#[ignore]` tests or examples, not CI gates.
 
 ## License
 

@@ -106,3 +106,11 @@ sparse-Lanczos ED to ≤ 1.1e-13. That holds for L = 24 (46368 paths) too,
 where the centre bond is truncated.
 
 ![|E_DMRG − E_ED| against L](docs/figures/energy_error.png)
+
+## References
+
+- A. Feiguin, S. Trebst, A. W. W. Ludwig, M. Troyer, A. Kitaev, Z. Wang,
+  M. H. Freedman, "Interacting anyons in topological quantum liquids: the
+  golden chain", Phys. Rev. Lett. 98, 160409 (2007).
+- MPSKit.jl 0.13.13 (`DMRG2`, `updatetol`, entropy convention) and
+  TensorKit.jl 0.17.1 (semantics and conventions).
